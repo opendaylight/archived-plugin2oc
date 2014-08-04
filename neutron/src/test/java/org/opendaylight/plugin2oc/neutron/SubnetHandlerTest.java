@@ -59,6 +59,7 @@ public class SubnetHandlerTest {
         neutronSubnet_IPAllocationPool.setPoolEnd("10.0.0.254");
         allocationPools.add(neutronSubnet_IPAllocationPool);
         subnet.setAllocationPools(allocationPools);
+        subnet.setEnableDHCP(true);
         return subnet;
     }
 

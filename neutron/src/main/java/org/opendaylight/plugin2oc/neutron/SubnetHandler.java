@@ -19,6 +19,8 @@ import net.juniper.contrail.api.types.NetworkIpam;
 import net.juniper.contrail.api.types.SubnetType;
 import net.juniper.contrail.api.types.VirtualNetwork;
 import net.juniper.contrail.api.types.VnSubnetsType;
+import net.juniper.contrail.api.types.VnSubnetsType.IpamSubnetType;
+//import net.juniper.contrail.api.types.VnSubnetsType.IpamSubnetType.AllocationPoolType;
 
 import org.apache.commons.net.util.SubnetUtils;
 import org.apache.commons.net.util.SubnetUtils.SubnetInfo;
@@ -150,10 +152,11 @@ public class SubnetHandler implements INeutronSubnetAware {
             LOGGER.warn("Subnet creation failed..");
             return HttpURLConnection.HTTP_INTERNAL_ERROR;
         } else {
-            LOGGER.info("Subnet " + subnet.getCidr() + "sucessfully added to the network having UUID : " + virtualnetwork.getUuid());
+            LOGGER.info("Subnet " + subnet.getCidr() + " sucessfully added to the network having UUID : " + virtualnetwork.getUuid());
             return HttpURLConnection.HTTP_OK;
         }
     }
+
 
     /**
      * Invoked to add the NeutronSubnet properties to the virtualNetwork object.
@@ -187,13 +190,21 @@ public class SubnetHandler implements INeutronSubnetAware {
         if (ipPrefix != null) {
             subnetType.setIpPrefix(ipPrefix[0]);
             subnetType.setIpPrefixLen(Integer.valueOf(ipPrefix[1]));
+//            AllocationPoolType allocationPoolType = (AllocationPoolType) subnet.getAllocationPools();
+            IpamSubnetType ipamSubnetType = new IpamSubnetType();
+            ipamSubnetType.setSubnet(subnetType);
+            ipamSubnetType.setDefaultGateway(subnet.getGatewayIP());
+            ipamSubnetType.setSubnetUuid(subnet.getSubnetUUID());
+            ipamSubnetType.setSubnetName(subnet.getName());
+            ipamSubnetType.setEnableDhcp(subnet.isEnableDHCP());
+//            ipamSubnetType.addAllocationPools(allocationPoolType);
             if (vn.getNetworkIpam() != null) {
                 for (ObjectReference<VnSubnetsType> ref : vn.getNetworkIpam()) {
                     vnSubnetsType = ref.getAttr();
-                    vnSubnetsType.addIpamSubnets(subnetType, subnet.getGatewayIP(), subnet.getSubnetUUID());
+                    vnSubnetsType.addIpamSubnets(ipamSubnetType);
                 }
             } else {
-                vnSubnetsType.addIpamSubnets(subnetType, subnet.getGatewayIP(), subnet.getSubnetUUID());
+                vnSubnetsType.addIpamSubnets(ipamSubnetType);
             }
             vn.setNetworkIpam(ipam, vnSubnetsType);
         }
@@ -236,15 +247,16 @@ public class SubnetHandler implements INeutronSubnetAware {
             LOGGER.error("Neutron Subnets can't be null..");
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
-        if (deltaSubnet.getGatewayIP() == null || ("").equals(deltaSubnet.getGatewayIP().toString())) {
-            LOGGER.error("Gateway IP can't be empty/null`..");
-            return HttpURLConnection.HTTP_BAD_REQUEST;
-        }
+//        if (deltaSubnet.getGatewayIP() == null || ("").equals(deltaSubnet.getGatewayIP().toString())) {
+//            LOGGER.error("Gateway IP can't be empty/null`..");
+//            return HttpURLConnection.HTTP_BAD_REQUEST;
+//        }
+        if (deltaSubnet.getGatewayIP() != null){
         boolean isvalidGateway = validGatewayIP(originalSubnet, deltaSubnet.getGatewayIP());
         if (!isvalidGateway) {
             LOGGER.error("Incorrect gateway IP....");
             return HttpURLConnection.HTTP_BAD_REQUEST;
-        }
+        }}
         apiConnector = Activator.apiConnector;
         try {
             boolean ifSubnetExist = false;
@@ -258,7 +270,15 @@ public class SubnetHandler implements INeutronSubnetAware {
                         for (VnSubnetsType.IpamSubnetType subnetValue : subnets) {
                             boolean doesSubnetExist = subnetValue.getSubnetUuid().matches(originalSubnet.getSubnetUUID());
                             if (doesSubnetExist) {
+                                if(deltaSubnet.getGatewayIP() != null){
                                 subnetValue.setDefaultGateway(deltaSubnet.getGatewayIP());
+                                }
+                                if(deltaSubnet.getEnableDHCP() != null){
+                                    subnetValue.setEnableDhcp(deltaSubnet.isEnableDHCP());
+                                }
+                                if(deltaSubnet.getName() != null){
+                                    subnetValue.setSubnetName(deltaSubnet.getName());
+                                }
                                 ifSubnetExist = true;
                             }
                         }
@@ -271,7 +291,7 @@ public class SubnetHandler implements INeutronSubnetAware {
                     LOGGER.warn("Subnet upadtion failed..");
                     return HttpURLConnection.HTTP_INTERNAL_ERROR;
                 } else {
-                    LOGGER.info(" Subnet " + originalSubnet.getCidr() + " sucessfully updated with gateway IP : " + deltaSubnet.getGatewayIP());
+                    LOGGER.info(" Subnet " + originalSubnet.getCidr() + " sucessfully updated. ");
                     return HttpURLConnection.HTTP_OK;
                 }
             } else {

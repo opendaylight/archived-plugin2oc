@@ -91,10 +91,11 @@ public class PortHandler implements INeutronPortAware {
     private int createPort(NeutronPort neutronPort) {
         String networkID = neutronPort.getNetworkUUID();
         String portID = neutronPort.getID();
-        String portDesc = neutronPort.getID();
+//        String portDesc = neutronPort.getID();
         String deviceID = neutronPort.getDeviceID();
         String projectID = neutronPort.getTenantID();
         String portMACAddress = neutronPort.getMacAddress();
+        String portName = neutronPort.getName();
         VirtualMachineInterface virtualMachineInterface = null;
         VirtualMachine virtualMachine = null;
         VirtualNetwork virtualNetwork = null;
@@ -129,7 +130,7 @@ public class PortHandler implements INeutronPortAware {
                     LOGGER.debug("virtualMachine:   " + virtualMachine);
                     if (virtualMachine == null) {
                         virtualMachine = new VirtualMachine();
-                        virtualMachine.setName(deviceID);
+                        virtualMachine.setName(deviceID+"--"+portName);
                         virtualMachine.setUuid(deviceID);
                         boolean virtualMachineCreated = apiConnector.create(virtualMachine);
                         LOGGER.debug("virtualMachineCreated: " + virtualMachineCreated);
@@ -163,7 +164,7 @@ public class PortHandler implements INeutronPortAware {
                 } else {
                     virtualMachineInterface = new VirtualMachineInterface();
                     virtualMachineInterface.setUuid(portID);
-                    virtualMachineInterface.setName(portDesc);
+                    virtualMachineInterface.setName(portName);
                     virtualMachineInterface.setParent(project);
                     virtualMachineInterface.setVirtualNetwork(virtualNetwork);
                     macAddressesType.addMacAddress(portMACAddress);
@@ -462,10 +463,13 @@ public class PortHandler implements INeutronPortAware {
                 virtualMachineInterface.setVirtualMachine(virtualMachine);
             }
         }
+        if(deviceID == null){
+            virtualMachineInterface.clearVirtualMachine();
+        }
         if (portName != null) {
             virtualMachineInterface.setDisplayName(portName);
         }
-        if ((deviceID != null && !(("").equals(deviceID))) || portName != null || instanceIpUpdate) {
+        if ((deviceID != null && !(("").equals(deviceID))) || portName != null || instanceIpUpdate ) {
             if ((deviceID != null && !(("").equals(deviceID))) || portName != null) {
                 boolean portUpdate = apiConnector.update(virtualMachineInterface);
                 if (!portUpdate) {
@@ -490,13 +494,12 @@ public class PortHandler implements INeutronPortAware {
     @Override
     public void neutronPortUpdated(NeutronPort neutronPort) {
         try {
-            VirtualMachineInterface virtualMachineInterface;
-            virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID());
-            if (("").equals(neutronPort.getDeviceID())) { // TODO : VM Refs not getting cleared correctly - to be fixed
+            VirtualMachineInterface virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID());
+            if (neutronPort.getDeviceID() == null) { // TODO : VM Refs not getting cleared correctly - to be fixed
                 if (neutronPort.getName().matches(virtualMachineInterface.getDisplayName()) && virtualMachineInterface.getVirtualMachine() == null) {
                     LOGGER.info("Port updatation verified....");
                 }
-            } else if (neutronPort.getName().matches(virtualMachineInterface.getDisplayName())
+            } else if (neutronPort.getDeviceID() != null && neutronPort.getName().matches(virtualMachineInterface.getDisplayName())
                     && neutronPort.getDeviceID().matches(virtualMachineInterface.getVirtualMachine().get(0).getUuid())) {
                 LOGGER.info("Port updatation verified....");
             } else {
