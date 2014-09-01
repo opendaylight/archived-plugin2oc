@@ -1,5 +1,5 @@
 /*
-d * Copyright (C) 2014 Juniper Networks, Inc.
+ * Copyright (C) 2014 Juniper Networks, Inc.
  *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v1.0 which accompanies this distribution,
@@ -14,11 +14,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 import net.juniper.contrail.api.ApiConnector;
+import net.juniper.contrail.api.ObjectReference;
 import net.juniper.contrail.api.types.InstanceIp;
 import net.juniper.contrail.api.types.Project;
+import net.juniper.contrail.api.types.SubnetType;
 import net.juniper.contrail.api.types.VirtualMachine;
 import net.juniper.contrail.api.types.VirtualMachineInterface;
 import net.juniper.contrail.api.types.VirtualNetwork;
+import net.juniper.contrail.api.types.VnSubnetsType;
 
 import org.opendaylight.controller.networkconfig.neutron.NeutronPort;
 import org.opendaylight.controller.networkconfig.neutron.Neutron_IPs;
@@ -27,22 +30,16 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.powermock.api.easymock.PowerMock.expectNew;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.opendaylight.controller.networkconfig.neutron.NeutronNetwork;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 /**
- * Test Class for Neutron Network.
+ * Test Class for Neutron Port.
  */
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({ PortHandler.class, VirtualMachineInterface.class, InstanceIp.class })
+
 public class PortHandlerTest {
     PortHandler porthandler;
     PortHandler mockedporthandler = mock(PortHandler.class);
@@ -113,137 +110,88 @@ public class PortHandlerTest {
         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canCreatePort(null));
     }
 
-    /* Test method to check if neutron port device ID is empty */
+    /* Test method to check if neutron port PortUUID is empty */
     @Test
-    public void testCanCreateIdEmtpy() {
+    public void testCanCreatePortIdEmtpy() {
         Activator.apiConnector = mockedApiConnector;
-        NeutronPort neutronPort = new NeutronPort();
+        NeutronPort neutronPort = defaultNeutronPortObject();
         neutronPort.setPortUUID("");
         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canCreatePort(neutronPort));
     }
 
     /* Test method to check if neutron port tenant id is null */
     @Test
-    public void testCanCreateTenantIdNull() {
+    public void testCanCreatePortTenantIdNull() {
         Activator.apiConnector = mockedApiConnector;
         NeutronPort neutronPort = defaultNeutronPortObject();
         neutronPort.setTenantID(null);
         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canCreatePort(neutronPort));
     }
 
-    /* Test method to check if neutron port fixed IP is null */
+    /* Test method to check if neutron port name is null */
     @Test
-    public void testCanCreateFixedIPNull() {
+    public void testCanCreatePortNameNull() {
         Activator.apiConnector = mockedApiConnector;
         NeutronPort neutronPort = defaultNeutronPortObject();
-        neutronPort.setFixedIPs(null);
-        when(mockedNeutronPort.getFixedIPs()).thenReturn(null);
-        assertEquals(HttpURLConnection.HTTP_FORBIDDEN, porthandler.canCreatePort(neutronPort));
+        neutronPort.setName("");
+        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canCreatePort(neutronPort));
     }
 
-    /* Test method to check if neutron port is already exist */
+    /* Test method to check if neutron port and network belongs to same tenant */
     @Test
-    public void testCanCreatePortExist() throws IOException {
+    public void testCanCreatePortSameTenant() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronPort neutronPort = defaultNeutronPortObject();
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getID())).thenReturn(mockedVirtualMachineInterface);
-        assertEquals(HttpURLConnection.HTTP_FORBIDDEN, porthandler.canCreatePort(neutronPort));
-    }
-
-    /* Test method to check if Virtual Machine Is Not Created */
-    @Test
-    public void testCanCreatePortVirtualMachineNotCreated() throws Exception {
-        Activator.apiConnector = mockedApiConnector;
-        NeutronPort neutronPort = defaultNeutronPortObject();
-        VirtualMachine mockedvirtualMachine = PowerMock.createNiceMock(VirtualMachine.class);
-        expectNew(VirtualMachine.class).andReturn(mockedvirtualMachine);
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(null);
-        when(mockedApiConnector.findById(VirtualMachine.class, neutronPort.getDeviceID())).thenReturn(null);
-        when(mockedApiConnector.create(mockedvirtualMachine)).thenReturn(false);
-        PowerMock.replay(mockedvirtualMachine, VirtualMachine.class);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, porthandler.canCreatePort(neutronPort));
+        when(mockedVirtualNetwork.getParentUuid()).thenReturn("f00071fe-0216-46bc-a3e6-1ff582fbd324");
+        when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(mockedProject);
+        when(mockedApiConnector.findById(VirtualNetwork.class, neutronPort.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
+        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canCreatePort(neutronPort));
     }
 
     /* Test method to check if Project is not available */
     @Test
-    public void testCanCreatePortProjectSearch() throws Exception {
+    public void testCanCreatePortProjectNotFound() throws Exception {
         Activator.apiConnector = mockedApiConnector;
         NeutronPort neutronPort = defaultNeutronPortObject();
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(null);
-        when(mockedApiConnector.findById(VirtualMachine.class, neutronPort.getDeviceID())).thenReturn(mockedvirtualMachine);
-        when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(null);
         when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(null);
         assertEquals(HttpURLConnection.HTTP_NOT_FOUND, porthandler.canCreatePort(neutronPort));
     }
 
-    /* Test method to check if Virtual Network does not exist */
+    /* Test method to check if neutron port create exist */
     @Test
-    public void testCanCreatePortVirtualNetworkNotExist() throws IOException {
+    public void testCanCreatePortExist() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronPort neutronPort = defaultNeutronPortObject();
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getID())).thenReturn(null);
-        when(mockedApiConnector.findById(VirtualMachine.class, neutronPort.getDeviceID())).thenReturn(mockedvirtualMachine);
-        when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(mockedProject);
-        when(mockedApiConnector.findById(VirtualNetwork.class, neutronPort.getNetworkUUID())).thenReturn(null);
-        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canCreatePort(neutronPort));
-    }
-
-    /* Test method to check if virtual machine interface creation failed */
-    @Test
-    public void testCanCreateVirtualMachineInterface() throws Exception {
-        Activator.apiConnector = mockedApiConnector;
-        NeutronPort neutronPort = defaultNeutronPortObject();
-        VirtualMachineInterface mockedVirtualMachineInterface = PowerMock.createNiceMock(VirtualMachineInterface.class);
-        expectNew(VirtualMachineInterface.class).andReturn(mockedVirtualMachineInterface);
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getID())).thenReturn(null);
-        when(mockedApiConnector.findById(VirtualMachine.class, neutronPort.getDeviceID())).thenReturn(mockedvirtualMachine);
+        when(mockedVirtualNetwork.getParentUuid()).thenReturn(neutronPort.getTenantID());
         when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(mockedProject);
         when(mockedApiConnector.findById(VirtualNetwork.class, neutronPort.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
-        when(mockedApiConnector.create(mockedVirtualMachineInterface)).thenReturn(false);
-        PowerMock.replay(mockedVirtualMachineInterface, VirtualMachineInterface.class);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, porthandler.canCreatePort(neutronPort));
+        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(mockedVirtualMachineInterface);
+        assertEquals(HttpURLConnection.HTTP_FORBIDDEN, porthandler.canCreatePort(neutronPort));
     }
 
-    /* Test method to check port is not created */
+    /* Test method to check if neutron port create exist with same name */
     @Test
-    public void testCanCreatePortFails() throws Exception {
+    public void testCanCreatePortExistSameName() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronPort neutronPort = defaultNeutronPortObject();
-        VirtualMachineInterface mockedVirtualMachineInterface = PowerMock.createNiceMock(VirtualMachineInterface.class);
-        expectNew(VirtualMachineInterface.class).andReturn(mockedVirtualMachineInterface);
-        InstanceIp mockedInstanceIp = PowerMock.createNiceMock(InstanceIp.class);
-        expectNew(InstanceIp.class).andReturn(mockedInstanceIp);
+        when(mockedVirtualNetwork.getParentUuid()).thenReturn(neutronPort.getTenantID());
+        when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(mockedProject);
+        when(mockedApiConnector.findById(VirtualNetwork.class, neutronPort.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
         when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(null);
-        when(mockedApiConnector.findById(VirtualMachine.class, neutronPort.getDeviceID())).thenReturn(mockedvirtualMachine);
-        when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(mockedProject);
-        when(mockedApiConnector.findById(VirtualNetwork.class, neutronPort.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
-        when(mockedApiConnector.create(mockedVirtualMachineInterface)).thenReturn(true);
-        PowerMock.replay(mockedVirtualMachineInterface, VirtualMachineInterface.class);
-        when(neutronPort.getFixedIPs().get(0).getIpAddress()).thenReturn("10.0.0.1");
-        when(mockedApiConnector.create(mockedInstanceIp)).thenReturn(false);
-        PowerMock.replay(mockedInstanceIp, InstanceIp.class);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, porthandler.canCreatePort(neutronPort));
+        when(mockedApiConnector.findByName(VirtualMachineInterface.class, mockedProject, neutronPort.getName())).thenReturn("PORT-001");
+        assertEquals(HttpURLConnection.HTTP_FORBIDDEN, porthandler.canCreatePort(neutronPort));
     }
 
-    /* Test method to check port is created */
-
+    /* Test method to check if neutron port create ok */
     @Test
-    public void testCanCreatePortOk() throws Exception {
+    public void testCanCreatePortOK() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronPort neutronPort = defaultNeutronPortObject();
-        VirtualMachineInterface mockedVirtualMachineInterface = PowerMock.createNiceMock(VirtualMachineInterface.class);
-        expectNew(VirtualMachineInterface.class).andReturn(mockedVirtualMachineInterface);
-        InstanceIp mockedInstanceIp = PowerMock.createNiceMock(InstanceIp.class);
-        expectNew(InstanceIp.class).andReturn(mockedInstanceIp);
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(null);
-        when(mockedApiConnector.findById(VirtualMachine.class, neutronPort.getDeviceID())).thenReturn(mockedvirtualMachine);
+        when(mockedVirtualNetwork.getParentUuid()).thenReturn(neutronPort.getTenantID());
         when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(mockedProject);
         when(mockedApiConnector.findById(VirtualNetwork.class, neutronPort.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
-        when(mockedApiConnector.create(mockedVirtualMachineInterface)).thenReturn(true);
-        PowerMock.replay(mockedVirtualMachineInterface, VirtualMachineInterface.class);
-        when(neutronPort.getFixedIPs().get(0).getIpAddress()).thenReturn("10.0.0.1");
-        when(mockedApiConnector.create(mockedInstanceIp)).thenReturn(true);
-        PowerMock.replay(mockedInstanceIp, InstanceIp.class);
+        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(null);
+        when(mockedApiConnector.findByName(VirtualMachineInterface.class, mockedProject, neutronPort.getName())).thenReturn(null);
         assertEquals(HttpURLConnection.HTTP_OK, porthandler.canCreatePort(neutronPort));
     }
 
@@ -254,23 +202,33 @@ public class PortHandlerTest {
         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canDeletePort(null));
     }
 
-    /* Test method to check if virtual machine interface is null */
+    /* Test method to check if virtual machine interface is null for delete */
     @Test
     public void testcanDeletePortVirtualMachineInterfaceNull() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronPort neutronPort = defaultNeutronPortObject();
         when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getID())).thenReturn(null);
-        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canDeletePort(neutronPort));
+        assertEquals(HttpURLConnection.HTTP_NOT_FOUND, porthandler.canDeletePort(neutronPort));
     }
 
-    /* Test method to update port with null neutron port and delta port */
+    /* Test method to check if can delete return status 200 OK */
+    @Test
+    public void testcanDeletePortOk() throws IOException {
+        Activator.apiConnector = mockedApiConnector;
+        NeutronPort neutronPort = defaultNeutronPortObject();
+        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getID())).thenReturn(mockedVirtualMachineInterface);
+        when(mockedVirtualMachineInterface.getFloatingIpBackRefs()).thenReturn(null);
+        assertEquals(HttpURLConnection.HTTP_OK, porthandler.canDeletePort(neutronPort));
+    }
+
+    /* Test method to update port with null neutron port and delta port obj*/
     @Test
     public void testcanUpdatePortNull() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canUpdatePort(null, null));
     }
 
-    /* Test method to update port with mac address */
+    /* Test method to update port with Mac address */
     @Test
     public void testcanUpdatePortMacAddress() throws IOException {
         Activator.apiConnector = mockedApiConnector;
@@ -280,80 +238,94 @@ public class PortHandlerTest {
         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canUpdatePort(dummyNeutronPort, neutronPort));
     }
 
-    /* Test method to update port when IpPrefix is null and network Uuid exist */
+    /* Test method to update port when port not found */
     @Test
-    public void testcanUpdatePortIpPrefixNull() throws IOException {
+    public void testcanUpdatePortVMInotFound() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronPort neutronPort = defaultNeutronPortObject();
         NeutronPort dummyNeutronPort = detaNeutronPort();
-        dummyNeutronPort.setFixedIPs(null);
-        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canUpdatePort(dummyNeutronPort, neutronPort));
+        when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(mockedProject);
+        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(null);
+        assertEquals(HttpURLConnection.HTTP_NOT_FOUND, porthandler.canUpdatePort(dummyNeutronPort, neutronPort));
     }
 
-    /* Test method to update port when virtual machine create fails */
+    /* Test method to update port when another port already exist with same name */
     @Test
-    public void testcanUpdatePortVirtualMachineCreateFail() throws Exception {
-        Activator.apiConnector = mockedApiConnector;
-        VirtualMachine mockedVirtualMachine = PowerMock.createNiceMock(VirtualMachine.class);
-        expectNew(VirtualMachine.class).andReturn(mockedVirtualMachine);
-        NeutronPort neutronPort = defaultNeutronPortObject();
-        NeutronPort dummyNeutronPort = detaNeutronPort();
-        dummyNeutronPort.setFixedIPs(null);
-        dummyNeutronPort.setNetworkUUID(null);
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(mockedVirtualMachineInterface);
-        when(mockedApiConnector.findById(VirtualMachine.class, neutronPort.getDeviceID())).thenReturn(null);
-        when(mockedApiConnector.create(mockedVirtualMachine)).thenReturn(false);
-        PowerMock.replay(mockedVirtualMachine, VirtualMachine.class);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, porthandler.canUpdatePort(dummyNeutronPort, neutronPort));
-    }
-
-    /* Test method to update port when update fails */
-    @Test
-    public void testcanUpdatePortVirtualMachineInterfaceUpdateFail() throws Exception {
+    public void testcanUpdatePortVMIbyName() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronPort neutronPort = defaultNeutronPortObject();
         NeutronPort dummyNeutronPort = detaNeutronPort();
-        dummyNeutronPort.setFixedIPs(null);
-        dummyNeutronPort.setNetworkUUID(null);
+        when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(mockedProject);
         when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(mockedVirtualMachineInterface);
-        when(mockedApiConnector.findById(VirtualMachine.class, neutronPort.getDeviceID())).thenReturn(mockedvirtualMachine);
-        when(mockedApiConnector.update(mockedVirtualMachineInterface)).thenReturn(false);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, porthandler.canUpdatePort(dummyNeutronPort, neutronPort));
-    }
-
-    /* Test method to update port */
-    @Test
-    public void testcanUpdatePortVirtualMachineInterfaceUpdateOk() throws Exception {
-        Activator.apiConnector = mockedApiConnector;
-        NeutronPort neutronPort = defaultNeutronPortObject();
-        NeutronPort dummyNeutronPort = detaNeutronPort();
-        dummyNeutronPort.setFixedIPs(null);
-        dummyNeutronPort.setNetworkUUID(null);
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(mockedVirtualMachineInterface);
-        when(mockedApiConnector.findById(VirtualMachine.class, neutronPort.getDeviceID())).thenReturn(mockedvirtualMachine);
-        when(mockedApiConnector.update(mockedVirtualMachineInterface)).thenReturn(true);
-        assertEquals(HttpURLConnection.HTTP_OK, porthandler.canUpdatePort(dummyNeutronPort, neutronPort));
-    }
-
-    /* Test method to update port when virtual network does not exist */
-    @Test
-    public void testcanUpdatePortVirtualNetworkNotExist() throws Exception {
-        Activator.apiConnector = mockedApiConnector;
-        NeutronPort neutronPort = defaultNeutronPortObject();
-        NeutronPort dummyNeutronPort = detaNeutronPort();
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(mockedVirtualMachineInterface);
-        when(mockedApiConnector.findById(VirtualNetwork.class, dummyNeutronPort.getNetworkUUID())).thenReturn(null);
+        when(mockedApiConnector.findByName(VirtualMachineInterface.class, mockedProject, dummyNeutronPort.getName())).thenReturn("network-001");
         assertEquals(HttpURLConnection.HTTP_FORBIDDEN, porthandler.canUpdatePort(dummyNeutronPort, neutronPort));
     }
 
-    /* Test method to update port when virtual network does not exist */
+    /*
+     * Test method to update port when check for Subnet UUID must exist in the
+     * network
+     */
     @Test
-    public void testcanUpdatePortSubnetNotExistInNetwork() throws Exception {
+    public void testcanUpdatePortCheck() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronPort neutronPort = defaultNeutronPortObject();
         NeutronPort dummyNeutronPort = detaNeutronPort();
+        dummyNeutronPort.setFixedIPs(null);
+        when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(mockedProject);
         when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(mockedVirtualMachineInterface);
-        when(mockedApiConnector.findById(VirtualNetwork.class, dummyNeutronPort.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
+        when(mockedApiConnector.findByName(VirtualMachineInterface.class, mockedProject, dummyNeutronPort.getName())).thenReturn(null);
+        when(mockedApiConnector.findById(VirtualNetwork.class, neutronPort.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canUpdatePort(dummyNeutronPort, neutronPort));
+    }
+
+    /* Test method to update port when check for FixedIPs Not Null */
+    @Test
+    public void testcanUpdatePortFixedIPsNotNull() throws IOException {
+        Activator.apiConnector = mockedApiConnector;
+        NeutronPort neutronPort = defaultNeutronPortObject();
+        NeutronPort dummyNeutronPort = detaNeutronPort();
+        when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(mockedProject);
+        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(mockedVirtualMachineInterface);
+        when(mockedApiConnector.findByName(VirtualMachineInterface.class, mockedProject, dummyNeutronPort.getName())).thenReturn(null);
+        List<Neutron_IPs> ips = new ArrayList<Neutron_IPs>();
+        Neutron_IPs fixedIP = new Neutron_IPs();
+        fixedIP.setSubnetUUID("9b9570f2-17b1-4fc3-99ec-1b7f7778a29b");
+        ips.add(fixedIP);
+        dummyNeutronPort.setFixedIPs(ips);
+        when(mockedApiConnector.findById(VirtualNetwork.class, neutronPort.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
+        VnSubnetsType vnSubnetType = new VnSubnetsType();
+        ObjectReference<VnSubnetsType> ref = new ObjectReference<>();
+        List<ObjectReference<VnSubnetsType>> ipamRefs = new ArrayList<ObjectReference<VnSubnetsType>>();
+        List<VnSubnetsType.IpamSubnetType> subnets = new ArrayList<VnSubnetsType.IpamSubnetType>();
+        VnSubnetsType.IpamSubnetType subnetType = new VnSubnetsType.IpamSubnetType();
+        SubnetType type = new SubnetType();
+        List<String> temp = new ArrayList<String>();
+        for (int i = 0; i < 1; i++) {
+            subnetType.setSubnet(type);
+            subnetType.setSubnetUuid("0b9570f2-17b1-4fc3-99ec-1b7f7778a29b");
+            subnetType.getSubnet().setIpPrefix("10.0.0.0");
+            subnetType.getSubnet().setIpPrefixLen(24);
+            subnets.add(subnetType);
+            vnSubnetType.addIpamSubnets(subnetType);
+            ref.setReference(temp, vnSubnetType, "", "");
+            ipamRefs.add(ref);
+        }
+        when(mockedVirtualNetwork.getNetworkIpam()).thenReturn(ipamRefs);
+        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, porthandler.canUpdatePort(dummyNeutronPort, neutronPort));
+    }
+
+    /* Test method to update port when check for FixedIPs Not Null */
+    @Test
+    public void testcanUpdatePortok() throws IOException {
+        Activator.apiConnector = mockedApiConnector;
+        NeutronPort neutronPort = defaultNeutronPortObject();
+        NeutronPort dummyNeutronPort = detaNeutronPort();
+        when(mockedApiConnector.findById(Project.class, neutronPort.getTenantID())).thenReturn(mockedProject);
+        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID())).thenReturn(mockedVirtualMachineInterface);
+        when(mockedApiConnector.findByName(VirtualMachineInterface.class, mockedProject, dummyNeutronPort.getName())).thenReturn(null);
+        when(mockedApiConnector.findById(VirtualNetwork.class, dummyNeutronPort.getNetworkUUID())).thenReturn(null);
+        dummyNeutronPort.setNetworkUUID(null);
+        dummyNeutronPort.setFixedIPs(null);
+        assertEquals(HttpURLConnection.HTTP_OK, porthandler.canUpdatePort(dummyNeutronPort, neutronPort));
     }
 }

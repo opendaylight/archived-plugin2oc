@@ -16,6 +16,8 @@ import org.opendaylight.controller.networkconfig.neutron.INeutronFloatingIPAware
 import org.opendaylight.controller.networkconfig.neutron.INeutronNetworkAware;
 import org.opendaylight.controller.networkconfig.neutron.INeutronPortAware;
 import org.opendaylight.controller.networkconfig.neutron.INeutronRouterAware;
+import org.opendaylight.controller.networkconfig.neutron.INeutronSecurityGroupAware;
+//import org.opendaylight.controller.networkconfig.neutron.INeutronSecurityRuleAware;
 import org.opendaylight.controller.networkconfig.neutron.INeutronSubnetAware;
 import org.opendaylight.controller.sal.binding.api.BindingAwareBroker;
 import org.opendaylight.controller.sal.core.ComponentActivatorAbstractBase;
@@ -41,7 +43,8 @@ public class Activator extends ComponentActivatorAbstractBase {
 
     /**
      * Function called to get APIConnector object. porperties must be defined in
-     * opendaylight configuration folder inside config.ini at opendaylight/distribution
+     * opendaylight configuration folder inside config.ini at
+     * opendaylight/distribution
      * /opendaylight/src/main/resources/configuration/config.ini
      *
      */
@@ -77,7 +80,10 @@ public class Activator extends ComponentActivatorAbstractBase {
      */
     @Override
     public Object[] getImplementations() {
-        Object[] res = { NetworkHandler.class, SubnetHandler.class, PortHandler.class, RouterHandler.class, FloatingIpHandler.class };
+        Object[] res = { NetworkHandler.class, SubnetHandler.class, PortHandler.class, RouterHandler.class, FloatingIpHandler.class,
+                SecurityGroupHandler.class,
+//                SecurityGroupRulesHandler.class
+                };
         return res;
     }
 
@@ -113,6 +119,12 @@ public class Activator extends ComponentActivatorAbstractBase {
         if (imp.equals(FloatingIpHandler.class)) {
             c.setInterface(INeutronFloatingIPAware.class.getName(), null);
         }
+        if (imp.equals(SecurityGroupHandler.class)) {
+            c.setInterface(INeutronSecurityGroupAware.class.getName(), null);
+        }
+//        if (imp.equals(SecurityGroupRulesHandler.class)) {
+//            c.setInterface(INeutronSecurityRuleAware.class.getName(), null);
+//        }
         // Create service dependencies.
         c.add(createServiceDependency().setService(BindingAwareBroker.class).setCallbacks("setBindingAwareBroker", "unsetBindingAwareBroker")
                 .setRequired(true));

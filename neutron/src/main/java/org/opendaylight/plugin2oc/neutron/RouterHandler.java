@@ -1,3 +1,11 @@
+/*
+ * Copyright (C) 2014 Juniper Networks, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v1.0 which accompanies this distribution,
+ * and is available at http://www.eclipse.org/legal/epl-v10.html
+ *
+ */
 package org.opendaylight.plugin2oc.neutron;
 
 import java.io.IOException;
@@ -59,15 +67,30 @@ public class RouterHandler implements INeutronRouterAware {
             LOGGER.error("Router name can't be null/empty.");
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
-        String projectUUID = router.getTenantID();
-        if (!(projectUUID.contains("-"))) {
-            projectUUID = uuidFormater(projectUUID);
-        }
-        projectUUID = UUID.fromString(projectUUID).toString();
-        Project project;
         try {
-            project = (Project) apiConnector.findById(Project.class, projectUUID);
+            String projectUUID = router.getTenantID();
+            String routerUUID = router.getRouterUUID();
+            try {
+                if (!(projectUUID.contains("-"))) {
+                    projectUUID = Utils.uuidFormater(projectUUID);
+                }
 
+                if (!(routerUUID.contains("-"))) {
+                    routerUUID = Utils.uuidFormater(routerUUID);
+                }
+                boolean isValidRouterUUID = Utils.isValidHexNumber(routerUUID);
+                boolean isValidprojectUUID = Utils.isValidHexNumber(projectUUID);
+                if (!isValidRouterUUID || !isValidprojectUUID) {
+                    LOGGER.info("Badly formed Hexadecimal UUID...");
+                    return HttpURLConnection.HTTP_BAD_REQUEST;
+                }
+                projectUUID = UUID.fromString(projectUUID).toString();
+                routerUUID = UUID.fromString(routerUUID).toString();
+            } catch (Exception ex) {
+                LOGGER.error("UUID input incorrect", ex);
+                return HttpURLConnection.HTTP_BAD_REQUEST;
+            }
+            Project project = (Project) apiConnector.findById(Project.class, projectUUID);
             if (project == null) {
                 Thread.currentThread();
                 Thread.sleep(3000);
@@ -77,7 +100,12 @@ public class RouterHandler implements INeutronRouterAware {
                     return HttpURLConnection.HTTP_NOT_FOUND;
                 }
             }
-            return createRouter(router);
+            String routerByName = apiConnector.findByName(LogicalRouter.class, project, router.getName());
+            if (routerByName != null) {
+                LOGGER.warn("Router already exists with UUID : " + routerByName);
+                return HttpURLConnection.HTTP_FORBIDDEN;
+            }
+            return HttpURLConnection.HTTP_OK;
         } catch (InterruptedException interruptedException) {
             LOGGER.error("InterruptedException :    ", interruptedException);
             return HttpURLConnection.HTTP_INTERNAL_ERROR;
@@ -92,38 +120,18 @@ public class RouterHandler implements INeutronRouterAware {
      *
      * @param router
      *            An instance of new Neutron Router object.
-     *
-     * @return A HTTP status code to the creation request.
      */
-    private int createRouter(NeutronRouter router) throws IOException {
+    private void createRouter(NeutronRouter router) throws IOException {
         LogicalRouter logicalRouter = new LogicalRouter();
-        logicalRouter = mapRouterProperties(router, logicalRouter);
-        String projectUUID = router.getTenantID();
-        if (!(projectUUID.contains("-"))) {
-            projectUUID = uuidFormater(projectUUID);
-        }
-        projectUUID = UUID.fromString(projectUUID).toString();
         try {
-            Project project = (Project) apiConnector.findById(Project.class, projectUUID);
-            logicalRouter.setParent(project);
-            if (router.getExternalGatewayInfo() != null) {
-                try {
-                    VirtualNetwork virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, router.getExternalGatewayInfo().getNetworkID());
-                    logicalRouter.setVirtualNetwork(virtualNetwork);
-                } catch (IOException ex) {
-                    LOGGER.error("IOException  :    " + ex);
-                }
-            }
+            logicalRouter = mapRouterProperties(router, logicalRouter);
             boolean routerCreated = apiConnector.create(logicalRouter);
             if (!routerCreated) {
                 LOGGER.warn("Router creation failed..");
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
             }
             LOGGER.info("Router : " + logicalRouter.getName() + "  having UUID : " + logicalRouter.getUuid() + "  sucessfully created...");
-            return HttpURLConnection.HTTP_OK;
         } catch (IOException ex) {
             LOGGER.error("IOException :   " + ex);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
     }
 
@@ -135,12 +143,21 @@ public class RouterHandler implements INeutronRouterAware {
      */
     @Override
     public void neutronRouterCreated(NeutronRouter router) {
-        LogicalRouter logicalRouter = null;
         try {
-            logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, router.getRouterUUID());
+            createRouter(router);
+            String routerUUID = router.getRouterUUID();
+            if (!(routerUUID.contains("-"))) {
+                routerUUID = Utils.uuidFormater(routerUUID);
+            }
+            routerUUID = UUID.fromString(routerUUID).toString();
+            LogicalRouter logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerUUID);
             if (logicalRouter != null) {
                 LOGGER.info("Router creation verified....");
+            } else {
+                LOGGER.error("Router creation failed....");
             }
+        } catch (IOException ioEx) {
+            LOGGER.error("IOException :   " + ioEx);
         } catch (Exception e) {
             LOGGER.error("Exception :    " + e);
         }
@@ -162,12 +179,17 @@ public class RouterHandler implements INeutronRouterAware {
             LOGGER.info("Router object can't be null...");
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
+        String routerUUID = router.getRouterUUID();
         try {
-            return deleteRouter(router.getRouterUUID());
+            if (!(routerUUID.contains("-"))) {
+                routerUUID = Utils.uuidFormater(routerUUID);
+            }
+            routerUUID = UUID.fromString(routerUUID).toString();
         } catch (Exception ex) {
-            LOGGER.error("Exception :   ", ex);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
+            LOGGER.error("UUID input incorrect", ex);
+            return HttpURLConnection.HTTP_BAD_REQUEST;
         }
+        return HttpURLConnection.HTTP_OK;
     }
 
     /**
@@ -175,24 +197,18 @@ public class RouterHandler implements INeutronRouterAware {
      *
      * @param router
      *            An instance of new Neutron router object.
-     *
-     * @return A HTTP status code to the deletion request.
      */
-    private int deleteRouter(String routerUUID) {
-        LogicalRouter logicalRouter = null;
+    private void deleteRouter(String routerUUID) {
         try {
-            logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerUUID);
+            LogicalRouter logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerUUID);
             if (logicalRouter != null) {
                 apiConnector.delete(logicalRouter);
                 LOGGER.info("Router with UUID :  " + routerUUID + "  has been deleted successfully....");
-                return HttpURLConnection.HTTP_OK;
             } else {
                 LOGGER.info("No Router exists with UUID :  " + routerUUID);
-                return HttpURLConnection.HTTP_BAD_REQUEST;
             }
         } catch (IOException ex) {
             LOGGER.error("Exception :    " + ex);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
     }
 
@@ -204,16 +220,22 @@ public class RouterHandler implements INeutronRouterAware {
      */
     @Override
     public void neutronRouterDeleted(NeutronRouter router) {
-        LogicalRouter logicalRouter = null;
         try {
-            logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, router.getRouterUUID());
-            if (logicalRouter != null) {
+            String routerUUID = router.getRouterUUID();
+            if (!(routerUUID.contains("-"))) {
+                routerUUID = Utils.uuidFormater(routerUUID);
+            }
+            routerUUID = UUID.fromString(routerUUID).toString();
+            deleteRouter(routerUUID);
+            LogicalRouter logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerUUID);
+            if (logicalRouter == null) {
                 LOGGER.info("Router deletion verified....");
+            } else {
+                LOGGER.error("Router deletion failed....");
             }
         } catch (IOException ex) {
             LOGGER.error("Exception :    " + ex);
         }
-
     }
 
     /**
@@ -233,13 +255,27 @@ public class RouterHandler implements INeutronRouterAware {
             LOGGER.error("Neutron Router object can't be null..");
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
+        String networkUUID = null;
+        String routerUUID = router.getRouterUUID();
         try {
-            LogicalRouter logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, router.getRouterUUID());
+            if (deltaRouter.getExternalGatewayInfo() != null) {
+                networkUUID = deltaRouter.getExternalGatewayInfo().getNetworkID();
+                if (!(networkUUID.contains("-"))) {
+                    networkUUID = Utils.uuidFormater(networkUUID);
+                }
+                networkUUID = UUID.fromString(networkUUID).toString();
+            }
+        } catch (Exception ex) {
+            LOGGER.error("UUID input incorrect", ex);
+            return HttpURLConnection.HTTP_BAD_REQUEST;
+        }
+        try {
+            LogicalRouter logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerUUID);
             if (logicalRouter == null) {
                 LOGGER.warn("Router object not found..");
                 return HttpURLConnection.HTTP_NOT_FOUND;
             }
-            return updateRouter(logicalRouter, deltaRouter);
+            return HttpURLConnection.HTTP_OK;
         } catch (IOException ioEx) {
             LOGGER.error("Exception :    " + ioEx);
             return HttpURLConnection.HTTP_INTERNAL_ERROR;
@@ -251,26 +287,34 @@ public class RouterHandler implements INeutronRouterAware {
      *
      * @param deltaRouter
      *            An instance of Router.
-     * @param originalRouter
-     *            An instance of new logicalRouter object.
-     *
-     * @return A HTTP status code to the creation request.
      */
-    private int updateRouter(LogicalRouter logicalRouter, NeutronRouter deltaRouter) throws IOException {
+    private int updateRouter(NeutronRouter neutronRouter) throws IOException {
         try {
-            String routerName = deltaRouter.getName();
-            logicalRouter.setName(routerName);
+            String routerUUID = neutronRouter.getRouterUUID();
+            String networkUUID = null;
+            if (!(routerUUID.contains("-"))) {
+                routerUUID = Utils.uuidFormater(routerUUID);
+            }
+            routerUUID = UUID.fromString(routerUUID).toString();
+            if (neutronRouter.getExternalGatewayInfo() != null) {
+                networkUUID = neutronRouter.getExternalGatewayInfo().getNetworkID();
+                if (!(networkUUID.contains("-"))) {
+                    networkUUID = Utils.uuidFormater(networkUUID);
+                }
+                networkUUID = UUID.fromString(networkUUID).toString();
+            }
+            LogicalRouter logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerUUID);
+            String routerName = neutronRouter.getName();
             logicalRouter.setDisplayName(routerName);
-            VirtualNetwork virtualNetwork = null;
-            if (deltaRouter.getExternalGatewayInfo() != null) {
+            if (neutronRouter.getExternalGatewayInfo() != null) {
                 try {
-                    virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, deltaRouter.getExternalGatewayInfo().getNetworkID());
+                    VirtualNetwork virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
                     logicalRouter.setVirtualNetwork(virtualNetwork);
                 } catch (IOException ex) {
                     LOGGER.error("IOException  :    " + ex);
                 }
-            } else{
-            logicalRouter.clearVirtualNetwork();
+            } else {
+                logicalRouter.clearVirtualNetwork();
             }
             boolean routerUpdate = apiConnector.update(logicalRouter);
             if (!routerUpdate) {
@@ -292,17 +336,35 @@ public class RouterHandler implements INeutronRouterAware {
      *            An instance of modified Neutron router object.
      */
     @Override
-    public void neutronRouterUpdated(NeutronRouter router) {
+    public void neutronRouterUpdated(NeutronRouter updatedRouter) {
         try {
-            LogicalRouter logicalRouter = new LogicalRouter();
-            logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, router.getRouterUUID());
-
-            if (router.getName().equalsIgnoreCase(logicalRouter.getName())) {
+            String routerUUID = updatedRouter.getRouterUUID();
+            String networkUUID = null;
+            if (!(routerUUID.contains("-"))) {
+                routerUUID = Utils.uuidFormater(routerUUID);
+            }
+            routerUUID = UUID.fromString(routerUUID).toString();
+            if (updatedRouter.getExternalGatewayInfo() != null) {
+                networkUUID = updatedRouter.getExternalGatewayInfo().getNetworkID();
+                if (!(networkUUID.contains("-"))) {
+                    networkUUID = Utils.uuidFormater(networkUUID);
+                }
+                networkUUID = UUID.fromString(networkUUID).toString();
+            }
+            updateRouter(updatedRouter);
+            LogicalRouter logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerUUID);
+            if (updatedRouter.getExternalGatewayInfo() != null) {
+                if (updatedRouter.getName().matches(logicalRouter.getDisplayName())
+                        && networkUUID.matches(logicalRouter.getVirtualNetwork().get(0).getUuid())) {
+                    LOGGER.info("Router updatation verified....");
+                } else {
+                    LOGGER.info("Router updatation failed....");
+                }
+            } else if (updatedRouter.getName().matches(logicalRouter.getDisplayName())) {
                 LOGGER.info("Router updatation verified....");
             } else {
                 LOGGER.info("Router updatation failed....");
             }
-
         } catch (Exception ex) {
             LOGGER.error("Exception :    " + ex);
         }
@@ -323,34 +385,22 @@ public class RouterHandler implements INeutronRouterAware {
     @Override
     public int canAttachInterface(NeutronRouter router, NeutronRouter_Interface routerInterface) {
         apiConnector = Activator.apiConnector;
-        String portId = routerInterface.getPortUUID();
-        String routerId = router.getRouterUUID();
-        VirtualMachineInterface virtualMachineInterface = null;
-        LogicalRouter logicalRouter = null;
+        String portUUId = routerInterface.getPortUUID();
+        String routerUUId = router.getRouterUUID();
         try {
-            logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerId);
-            virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, portId);
-            if (virtualMachineInterface != null) {
-                logicalRouter.addVirtualMachineInterface(virtualMachineInterface);
+            if (!(portUUId.contains("-"))) {
+                portUUId = Utils.uuidFormater(portUUId);
             }
-//            logicalRouter.setDeviceOwner();  // TODO : Support needs to be added
-            boolean updateVMI = apiConnector.update(virtualMachineInterface);
-            if (!updateVMI) {
-                LOGGER.warn("virtualMachineInterface updation failed..");
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
+            if (!(routerUUId.contains("-"))) {
+                routerUUId = Utils.uuidFormater(routerUUId);
             }
-            boolean interfaceAttached = apiConnector.update(logicalRouter);
-            if (!interfaceAttached) {
-                LOGGER.warn("Interface attachment failed..");
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
-            }
-            LOGGER.info("Interface : " + logicalRouter.getName() + "  having UUID : " + logicalRouter.getUuid() + "  sucessfully attached with..."
-                    + logicalRouter.getVirtualMachineInterface());
-            return HttpURLConnection.HTTP_OK;
-        } catch (IOException ioEx) {
-            LOGGER.error("IOException :   " + ioEx);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
+            portUUId = UUID.fromString(portUUId).toString();
+            routerUUId = UUID.fromString(routerUUId).toString();
+        } catch (Exception ex) {
+            LOGGER.error("UUID input incorrect", ex);
+            return HttpURLConnection.HTTP_BAD_REQUEST;
         }
+        return HttpURLConnection.HTTP_OK;
     }
 
     /**
@@ -364,24 +414,54 @@ public class RouterHandler implements INeutronRouterAware {
      */
     @Override
     public void neutronRouterInterfaceAttached(NeutronRouter router, NeutronRouter_Interface routerInterface) {
-        String portId = routerInterface.getPortUUID();
-        String routerId = router.getRouterUUID();
+        String portUUId = routerInterface.getPortUUID();
+        String routerUUId = router.getRouterUUID();
         VirtualMachineInterface virtualMachineInterface = null;
+        LogicalRouter logicalRouter = null;
         try {
-            virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, portId);
-            List<ObjectReference<ApiPropertyBase>> virtualMachineList = virtualMachineInterface.getVirtualMachine();
-            if (virtualMachineList != null) {
-                for (ObjectReference<ApiPropertyBase> ref : virtualMachineList) {
-                    String deviceId = ref.getUuid();
-                    if (deviceId.equals(routerId)) {
+            if (!(portUUId.contains("-"))) {
+                portUUId = Utils.uuidFormater(portUUId);
+            }
+            portUUId = UUID.fromString(portUUId).toString();
+            if (!(routerUUId.contains("-"))) {
+                routerUUId = Utils.uuidFormater(routerUUId);
+            }
+            routerUUId = UUID.fromString(routerUUId).toString();
+            logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerUUId);
+            virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, portUUId);
+            if (virtualMachineInterface != null) {
+                logicalRouter.addVirtualMachineInterface(virtualMachineInterface);
+            }
+            // virtualMachineInterface.setDeviceOwner(); // TODO : Support needs
+            // to be added
+            // virtualMachineInterface.setDeviceId();
+            boolean updateVMI = apiConnector.update(virtualMachineInterface);
+            if (!updateVMI) {
+                LOGGER.warn("virtualMachineInterface updation failed..");
+            }
+            boolean interfaceAttached = apiConnector.update(logicalRouter);
+            if (!interfaceAttached) {
+                LOGGER.warn("Interface attachment failed..");
+            }
+            LOGGER.info("Interface : " + logicalRouter.getName() + "  having UUID : " + logicalRouter.getUuid() + "  sucessfully attached with "
+                    + logicalRouter.getVirtualMachineInterface());
+        } catch (IOException ioEx) {
+            LOGGER.error("IOException :   " + ioEx);
+        }
+
+        try {
+            if (logicalRouter.getVirtualMachineInterface() == null) {
+                List<ObjectReference<ApiPropertyBase>> virtualMachineInterfaceList = logicalRouter.getVirtualMachineInterface();
+                for (ObjectReference<ApiPropertyBase> vmiRef : virtualMachineInterfaceList) {
+                    String vmiUUID = vmiRef.getUuid();
+                    if (vmiUUID.equals(portUUId)) {
                         LOGGER.info("Interface attachment verified to router...");
+                        break;
+                    } else {
+                        LOGGER.info("Interface attachment failed to router...");
                     }
                 }
             }
-            // if(virtualMachineInterface.getVirtualMachine()!=null &&
-            // something.getDeviceOwner.equals("network:router_interface")){
-            // LOGGER.info("Interface attachment verified to router..." );
-            // }
         } catch (Exception ex) {
             LOGGER.error("Exception :    " + ex);
         }
@@ -402,39 +482,47 @@ public class RouterHandler implements INeutronRouterAware {
     @Override
     public int canDetachInterface(NeutronRouter router, NeutronRouter_Interface routerInterface) {
         apiConnector = Activator.apiConnector;
-        String portId = routerInterface.getPortUUID();
-        String routerId = router.getRouterUUID();
-        VirtualMachineInterface virtualMachineInterface = null;
-        LogicalRouter logicalRouter = null;
+        String portUUID = routerInterface.getPortUUID();
+        String routerUUID = router.getRouterUUID();
         try {
-            logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerId);
-            List<ObjectReference<ApiPropertyBase>> vmiList = logicalRouter.getVirtualMachineInterface();
-            for (ObjectReference<ApiPropertyBase> vmiRef : vmiList) {
-                if(vmiRef.getUuid().matches(portId)){
-                    vmiList.remove(vmiRef);
-                    break;
+            if (!(portUUID.contains("-"))) {
+                portUUID = Utils.uuidFormater(portUUID);
+            }
+            portUUID = UUID.fromString(portUUID).toString();
+            if (!(routerUUID.contains("-"))) {
+                routerUUID = Utils.uuidFormater(routerUUID);
+            }
+            routerUUID = UUID.fromString(routerUUID).toString();
+        } catch (Exception ex) {
+            LOGGER.error("UUID input incorrect", ex);
+            return HttpURLConnection.HTTP_BAD_REQUEST;
+        }
+        try {
+            LogicalRouter logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerUUID);
+            if (logicalRouter != null) {
+                List<ObjectReference<ApiPropertyBase>> vmiList = logicalRouter.getVirtualMachineInterface();
+                if (vmiList != null) {
+                    for (ObjectReference<ApiPropertyBase> vmiRef : vmiList) {
+                        if (vmiRef.getUuid().matches(portUUID)) {
+                            return HttpURLConnection.HTTP_OK;
+                        } else {
+                            LOGGER.error("No interface attached with port ID " + portUUID);
+                            return HttpURLConnection.HTTP_BAD_REQUEST;
+                        }
+                    }
                 }
+            } else {
+                LOGGER.error("No router exists with specified UUID");
+                return HttpURLConnection.HTTP_NOT_FOUND;
             }
-            virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, portId);
-//            virtualMachineInterface.clearDeviceId(); //TODO - support to be added in OpenContrail
-            // virtualMachineInterface.clearDeviceId(); //TODO - support to be added in OpenContrail
-            boolean updateVMI = apiConnector.update(virtualMachineInterface);
-            if (!updateVMI) {
-                LOGGER.warn("virtualMachineInterface updation failed..");
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
-            }
-            boolean interfaceDetached = apiConnector.update(logicalRouter);
-            if (!interfaceDetached) {
-                LOGGER.warn("Interface detachment failed..");
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
-            }
-            LOGGER.info("Interface : " + logicalRouter.getName() + "  having UUID : " + logicalRouter.getUuid() + "  sucessfully detached from..."
-                    + logicalRouter.getVirtualMachineInterface());
-            return HttpURLConnection.HTTP_OK;
-        } catch (IOException e) {
-            LOGGER.error("IOException :   " + e);
+        } catch (IOException ioEx) {
+            LOGGER.error("IOException   : ", ioEx);
+            return HttpURLConnection.HTTP_INTERNAL_ERROR;
+        } catch (Exception  ex) {
+            LOGGER.error("IOException   : ", ex);
             return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
+        return HttpURLConnection.HTTP_OK;
     }
 
     /**
@@ -448,24 +536,79 @@ public class RouterHandler implements INeutronRouterAware {
      */
     @Override
     public void neutronRouterInterfaceDetached(NeutronRouter router, NeutronRouter_Interface routerInterface) {
-        String routerId = router.getRouterUUID();
-        String portId = routerInterface.getPortUUID();
+        String portUUID = routerInterface.getPortUUID();
+        String routerUUID = router.getRouterUUID();
         try {
-            VirtualMachineInterface virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, portId);
-            LogicalRouter logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerId);
+            if (!(portUUID.contains("-"))) {
+                portUUID = Utils.uuidFormater(portUUID);
+            }
+            portUUID = UUID.fromString(portUUID).toString();
+            if (!(routerUUID.contains("-"))) {
+                routerUUID = Utils.uuidFormater(routerUUID);
+            }
+            routerUUID = UUID.fromString(routerUUID).toString();
+            LogicalRouter logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerUUID);
+            if (logicalRouter != null) {
+                List<ObjectReference<ApiPropertyBase>> vmiList = logicalRouter.getVirtualMachineInterface();
+                if (vmiList != null) {
+                    for (ObjectReference<ApiPropertyBase> vmiRef : vmiList) {
+                        if (vmiRef.getUuid().matches(portUUID)) {
+                            vmiList.remove(vmiRef);
+                            break;
+                        }
+                    }
+                }
+            }
+            VirtualMachineInterface virtualMachineInterface = (VirtualMachineInterface) apiConnector
+                    .findById(VirtualMachineInterface.class, portUUID);
+            // virtualMachineInterface.clearDeviceId(); //TODO - support to be
+            // added in OpenContrail
+            // virtualMachineInterface.clearDeviceId(); //TODO - support to be
+            // added in OpenContrail
+            boolean updateVMI = apiConnector.update(virtualMachineInterface);
+            if (!updateVMI) {
+                LOGGER.warn("virtualMachineInterface updation failed..");
+            }
+            boolean interfaceDetached = apiConnector.update(logicalRouter);
+            if (!interfaceDetached) {
+                LOGGER.warn("Interface detachment failed..");
+            }
+            LOGGER.info("Interface : " + logicalRouter.getName() + "  having UUID : " + logicalRouter.getUuid() + "  sucessfully detached from "
+                    + logicalRouter.getVirtualMachineInterface());
+        } catch (IOException e) {
+            LOGGER.error("IOException  :   " + e);
+        }
+        try {
+            // VirtualMachineInterface virtualMachineInterface =
+            // (VirtualMachineInterface)
+            // apiConnector.findById(VirtualMachineInterface.class, portUUID);
+            LogicalRouter logicalRouter = (LogicalRouter) apiConnector.findById(LogicalRouter.class, routerUUID);
+            if (logicalRouter.getVirtualMachineInterface() == null) {
+                List<ObjectReference<ApiPropertyBase>> virtualMachineInterfaceList = logicalRouter.getVirtualMachineInterface();
+                for (ObjectReference<ApiPropertyBase> vmiRef : virtualMachineInterfaceList) {
+                    String vmiUUID = vmiRef.getUuid();
+                    if (vmiUUID.equals(portUUID)) {
+                        LOGGER.info("Interface detachment failed...");
+                        break;
+                    } else {
+                        LOGGER.info("Interface detachment verified...");
+                    }
+                }
+            } else {
+                LOGGER.info("Interface detachment verified...");
+            }
             // if(virtualMachineInterface.getVirtualMachine()==null &&
             // virtualMachineInterface.getDeviceOwner==null){
             // LOGGER.info("Interface detachment verified from router..." );
             // }
         } catch (Exception e) {
-            LOGGER.error("Exception :    " + e);
+            LOGGER.error("Exception   :    " + e);
         }
     }
 
     /**
      * Invoked to map the NeutronRouter object properties to the logicalRouter
      * object.
-     *
      * @param neutronRouter
      *            An instance of new Neutron Router object.
      * @param logicalRouter
@@ -475,38 +618,44 @@ public class RouterHandler implements INeutronRouterAware {
     private LogicalRouter mapRouterProperties(NeutronRouter neutronRouter, LogicalRouter logicalRouter) {
         String routerUUID = neutronRouter.getRouterUUID();
         String routerName = neutronRouter.getName();
-        logicalRouter.setUuid(routerUUID);
-        logicalRouter.setName(routerName);
-        logicalRouter.setDisplayName(routerName);
-        VirtualNetwork virtualNetwork = null;
-        if (neutronRouter.getExternalGatewayInfo() != null) {
-            try {
-                virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, neutronRouter.getExternalGatewayInfo().getNetworkID());
-                logicalRouter.setVirtualNetwork(virtualNetwork);
-            } catch (IOException ex) {
-                LOGGER.error("IOException  :    " + ex);
+        String projectUUID = neutronRouter.getTenantID();
+        String networkUUID = null;
+        try {
+            if (!(projectUUID.contains("-"))) {
+                projectUUID = Utils.uuidFormater(projectUUID);
             }
+            projectUUID = UUID.fromString(projectUUID).toString();
+
+            if (neutronRouter.getExternalGatewayInfo() != null) {
+                networkUUID = neutronRouter.getExternalGatewayInfo().getNetworkID();
+                if (!(networkUUID.contains("-"))) {
+                    networkUUID = Utils.uuidFormater(networkUUID);
+                }
+                networkUUID = UUID.fromString(networkUUID).toString();
+            }
+
+            if (!(routerUUID.contains("-"))) {
+                routerUUID = Utils.uuidFormater(routerUUID);
+            }
+            routerUUID = UUID.fromString(routerUUID).toString();
+            Project project = (Project) apiConnector.findById(Project.class, projectUUID);
+            logicalRouter.setParent(project);
+            logicalRouter.setUuid(routerUUID);
+            logicalRouter.setName(routerName);
+            logicalRouter.setDisplayName(routerName);
+            VirtualNetwork virtualNetwork = null;
+            if (networkUUID != null) {
+                try {
+                    virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
+                    logicalRouter.setVirtualNetwork(virtualNetwork);
+                } catch (IOException ex) {
+                    LOGGER.error("IOException:    " + ex);
+                }
+            }
+        } catch (Exception ex) {
+            LOGGER.error("IOException      :    " + ex);
         }
         return logicalRouter;
-    }
-
-    /**
-     * Invoked to format the UUID if UUID is not in correct format.
-     *
-     * @param String
-     *            An instance of UUID string.
-     *
-     * @return Correctly formated UUID string.
-     */
-    private String uuidFormater(String uuid) {
-        String uuidPattern = null;
-        String id1 = uuid.substring(0, 8);
-        String id2 = uuid.substring(8, 12);
-        String id3 = uuid.substring(12, 16);
-        String id4 = uuid.substring(16, 20);
-        String id5 = uuid.substring(20, 32);
-        uuidPattern = (id1 + "-" + id2 + "-" + id3 + "-" + id4 + "-" + id5);
-        return uuidPattern;
     }
 
 }

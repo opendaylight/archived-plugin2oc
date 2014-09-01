@@ -59,21 +59,27 @@ public class NetworkHandler implements INeutronNetworkAware {
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
         try {
-            VirtualNetwork virtualNetwork = null;
-            String networkUUID = null;
-            String projectUUID = null;
+            String networkUUID = network.getNetworkUUID();
+            String projectUUID = network.getTenantID();
             try {
-                networkUUID = UUID.fromString(network.getNetworkUUID()).toString();
-                projectUUID = network.getTenantID().toString();
+                if (!(networkUUID.contains("-"))) {
+                    networkUUID = Utils.uuidFormater(networkUUID);
+                }
                 if (!(projectUUID.contains("-"))) {
-                    projectUUID = uuidFormater(projectUUID);
+                    projectUUID = Utils.uuidFormater(projectUUID);
+                }
+                boolean isValidNetworkUUID = Utils.isValidHexNumber(networkUUID);
+                boolean isValidprojectUUID = Utils.isValidHexNumber(projectUUID);
+                if (!isValidNetworkUUID || !isValidprojectUUID) {
+                    LOGGER.info("Badly formed Hexadecimal UUID...");
+                    return HttpURLConnection.HTTP_BAD_REQUEST;
                 }
                 projectUUID = UUID.fromString(projectUUID).toString();
+                networkUUID = UUID.fromString(networkUUID).toString();
             } catch (Exception ex) {
                 LOGGER.error("UUID input incorrect", ex);
                 return HttpURLConnection.HTTP_BAD_REQUEST;
             }
-            virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
             Project project = (Project) apiConnector.findById(Project.class, projectUUID);
             if (project == null) {
                 try {
@@ -89,11 +95,17 @@ public class NetworkHandler implements INeutronNetworkAware {
                     return HttpURLConnection.HTTP_NOT_FOUND;
                 }
             }
-            if (virtualNetwork != null) {
-                LOGGER.warn("Network already exists..");
+            VirtualNetwork virtualNetworkById = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
+            if (virtualNetworkById != null) {
+                LOGGER.warn("Network already exists with UUID" + networkUUID);
                 return HttpURLConnection.HTTP_FORBIDDEN;
             }
-            return createNetwork(network);
+            String virtualNetworkByName = apiConnector.findByName(VirtualNetwork.class, project, network.getNetworkName());
+            if (virtualNetworkByName != null) {
+                LOGGER.warn("Network already exists with name : " + virtualNetworkByName);
+                return HttpURLConnection.HTTP_FORBIDDEN;
+            }
+            return HttpURLConnection.HTTP_OK;
         } catch (IOException ie) {
             LOGGER.error("IOException :   " + ie);
             return HttpURLConnection.HTTP_INTERNAL_ERROR;
@@ -111,9 +123,19 @@ public class NetworkHandler implements INeutronNetworkAware {
      */
     @Override
     public void neutronNetworkCreated(NeutronNetwork network) {
+        try {
+            createNetwork(network);
+        } catch (IOException ex) {
+            LOGGER.warn("Exception  :    " + ex);
+        }
         VirtualNetwork virtualNetwork = null;
         try {
-            virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, network.getNetworkUUID());
+            String networkUUID = network.getNetworkUUID();
+            if (!(networkUUID.contains("-"))) {
+                networkUUID = Utils.uuidFormater(networkUUID);
+            }
+            networkUUID = UUID.fromString(networkUUID).toString();
+            virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
             if (virtualNetwork != null) {
                 LOGGER.info("Network creation verified....");
             }
@@ -127,20 +149,9 @@ public class NetworkHandler implements INeutronNetworkAware {
      *
      * @param network
      *            An instance of new Neutron Network object.
-     *
-     * @return A HTTP status code to the creation request.
      */
-    private int createNetwork(NeutronNetwork network) throws IOException {
-        VirtualNetwork virtualNetwork = null;
-        Project project;
-        virtualNetwork = new VirtualNetwork();
-        try {
-            project = (Project) apiConnector.findById(Project.class, network.getTenantID());
-            virtualNetwork.setParent(project);
-        } catch (IOException ioEx) {
-            LOGGER.error("Exception : " + ioEx);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
-        }
+    private void createNetwork(NeutronNetwork network) throws IOException {
+        VirtualNetwork virtualNetwork = new VirtualNetwork();
         // map neutronNetwork to virtualNetwork
         virtualNetwork = mapNetworkProperties(network, virtualNetwork);
         boolean networkCreated;
@@ -149,11 +160,9 @@ public class NetworkHandler implements INeutronNetworkAware {
             LOGGER.debug("networkCreated:   " + networkCreated);
             if (!networkCreated) {
                 LOGGER.warn("Network creation failed..");
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
             }
         } catch (IOException ioEx) {
             LOGGER.error("Exception : " + ioEx);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
         LOGGER.info("Network : " + virtualNetwork.getName() + "  having UUID : " + virtualNetwork.getUuid() + "  sucessfully created...");
         if (virtualNetwork.getRouterExternal()) {
@@ -169,18 +178,14 @@ public class NetworkHandler implements INeutronNetworkAware {
                 createFloatingIpPool = apiConnector.create(floatingIpPool);
                 if (!createFloatingIpPool) {
                     LOGGER.info("Floating Ip pool creation failed..");
-                    return HttpURLConnection.HTTP_INTERNAL_ERROR;
                 } else {
                     LOGGER.info("Floating Ip pool created with UUID  : " + floatingIpPool.getUuid());
                 }
             } catch (IOException ioEx) {
                 LOGGER.error("IOException : " + ioEx);
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
             }
         }
-        return HttpURLConnection.HTTP_OK;
-        }
-
+    }
 
     /**
      * Invoked to map the NeutronNetwork object properties to the virtualNetwork
@@ -196,7 +201,22 @@ public class NetworkHandler implements INeutronNetworkAware {
         boolean routerExternal = false;
         boolean ishared = false;
         String networkUUID = neutronNetwork.getNetworkUUID();
+        String projectUUID = neutronNetwork.getTenantID();
         String networkName = neutronNetwork.getNetworkName();
+        try {
+            if (!(networkUUID.contains("-"))) {
+                networkUUID = Utils.uuidFormater(networkUUID);
+            }
+            networkUUID = UUID.fromString(networkUUID).toString();
+            if (!(projectUUID.contains("-"))) {
+                projectUUID = Utils.uuidFormater(projectUUID);
+            }
+            projectUUID = UUID.fromString(projectUUID).toString();
+            Project project = (Project) apiConnector.findById(Project.class, projectUUID);
+            virtualNetwork.setParent(project);
+        } catch (Exception ex) {
+            LOGGER.error("UUID input incorrect", ex);
+        }
         if (neutronNetwork.getRouterExternal() != null) {
             routerExternal = neutronNetwork.getRouterExternal();
         }
@@ -229,30 +249,46 @@ public class NetworkHandler implements INeutronNetworkAware {
             LOGGER.error("Neutron Networks can't be null..");
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
+        String networkUUID = originalNetwork.getNetworkUUID();
+        String projectUUID = originalNetwork.getTenantID();
+        try {
+            if (!(networkUUID.contains("-"))) {
+                networkUUID = Utils.uuidFormater(networkUUID);
+                networkUUID = UUID.fromString(networkUUID).toString();
+            }
+            if (!(projectUUID.contains("-"))) {
+                projectUUID = Utils.uuidFormater(projectUUID);
+                projectUUID = UUID.fromString(projectUUID).toString();
+            }
+        } catch (Exception ex) {
+            LOGGER.error("UUID input incorrect", ex);
+        }
         if (("").equals(deltaNetwork.getNetworkName())) {
             LOGGER.error("Neutron Networks name to be update can't be empty..");
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
         try {
-            virtualnetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, originalNetwork.getNetworkUUID());
-        } catch (IOException e) {
-            LOGGER.error("Exception :     " + e);
+            Project project = (Project) apiConnector.findById(Project.class, projectUUID);
+            String virtualNetworkByName = apiConnector.findByName(VirtualNetwork.class, project, deltaNetwork.getNetworkName());
+            if (virtualNetworkByName != null) {
+                LOGGER.warn("Network with name  " + deltaNetwork.getNetworkName() + "  already exists with UUID : " + virtualNetworkByName);
+                return HttpURLConnection.HTTP_FORBIDDEN;
+            }
+        } catch (IOException ioEx) {
+            LOGGER.error("IOException :     " + ioEx);
+            return HttpURLConnection.HTTP_INTERNAL_ERROR;
+        }
+        try {
+            virtualnetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
+        } catch (IOException ex) {
+            LOGGER.error("Exception :     " + ex);
             return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
         if (virtualnetwork == null) {
             LOGGER.error("No network exists for the specified UUID...");
             return HttpURLConnection.HTTP_FORBIDDEN;
-        } else {
-            try {
-                return updateNetwork(originalNetwork.getNetworkUUID(),deltaNetwork);
-            } catch (IOException ie) {
-                LOGGER.error("IOException:     " + ie);
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
-            } catch (Exception e) {
-                LOGGER.error("Exception:     " + e);
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
-            }
         }
+        return HttpURLConnection.HTTP_OK;
     }
 
     /**
@@ -260,83 +296,76 @@ public class NetworkHandler implements INeutronNetworkAware {
      *
      * @param delta_network
      *            An instance of Network.
-     * @param virtualNetwork
-     *            An instance of new virtualNetwork object.
-     *
-     * @return A HTTP status code to the creation request.
      */
-    private int updateNetwork(String networkUUID, NeutronNetwork deltaNetwork) throws IOException {
-        VirtualNetwork originalNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
+    private void updateNetwork(NeutronNetwork updatedNetwork) throws IOException {
+        String networkUUID = updatedNetwork.getNetworkUUID();
+        try {
+            if (!(networkUUID.contains("-"))) {
+                networkUUID = Utils.uuidFormater(networkUUID);
+            }
+            networkUUID = UUID.fromString(networkUUID).toString();
+        } catch (Exception ex) {
+            LOGGER.error("UUID input incorrect", ex);
+        }
         VirtualNetwork virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
-
-        String networkName = deltaNetwork.getNetworkName();
-        if (deltaNetwork.getShared() != null) {
-            virtualNetwork.setIsShared(deltaNetwork.getShared());
+        if (updatedNetwork.getShared() != null) {
+            virtualNetwork.setIsShared(updatedNetwork.getShared());
         }
-        if (deltaNetwork.getRouterExternal() != null) {
-            virtualNetwork.setRouterExternal(deltaNetwork.getRouterExternal());
+        if (updatedNetwork.getRouterExternal() != null) {
+            virtualNetwork.setRouterExternal(updatedNetwork.getRouterExternal());
         }
-        virtualNetwork.setName(networkName);
-        virtualNetwork.setDisplayName(networkName);
+        virtualNetwork.setDisplayName(updatedNetwork.getNetworkName());
         boolean networkUpdate;
         try {
             networkUpdate = apiConnector.update(virtualNetwork);
             if (!networkUpdate) {
                 LOGGER.warn("Network Updation failed..");
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
             }
         } catch (IOException e) {
             LOGGER.warn("Network Updation failed..");
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
         LOGGER.info("Network having UUID : " + virtualNetwork.getUuid() + "  has been sucessfully updated...");
-        if (deltaNetwork.getRouterExternal() != null) {
-            if (!(originalNetwork.getRouterExternal()) && deltaNetwork.getRouterExternal()) {
-            VirtualNetwork updatedVirtualnetwork;
-            try {
-                updatedVirtualnetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, originalNetwork.getUuid());
-                FloatingIpPool floatingIpPool = null;
-                String fipId = UUID.randomUUID().toString();
-                floatingIpPool = new FloatingIpPool();
-                floatingIpPool.setName(fipId);
-                floatingIpPool.setDisplayName(fipId);
-                floatingIpPool.setUuid(fipId);
-                floatingIpPool.setParent(updatedVirtualnetwork);
-                boolean createFloatingIpPool = apiConnector.create(floatingIpPool);
-                if (!createFloatingIpPool) {
+        if (updatedNetwork.getRouterExternal()) {
+            if (virtualNetwork.getFloatingIpPools() == null) {
+                try {
+                    FloatingIpPool floatingIpPool = null;
+                    String fipId = UUID.randomUUID().toString();
+                    floatingIpPool = new FloatingIpPool();
+                    floatingIpPool.setName(fipId);
+                    floatingIpPool.setDisplayName(fipId);
+                    floatingIpPool.setUuid(fipId);
+                    floatingIpPool.setParent(virtualNetwork);
+                    boolean createFloatingIpPool = apiConnector.create(floatingIpPool);
+                    if (!createFloatingIpPool) {
+                        LOGGER.info("Floating Ip pool creation failed..");
+                    } else {
+                        LOGGER.info("Floating Ip pool created with UUID  : " + floatingIpPool.getUuid());
+                    }
+                } catch (IOException e) {
                     LOGGER.info("Floating Ip pool creation failed..");
-                    return HttpURLConnection.HTTP_INTERNAL_ERROR;
-                } else {
-                    LOGGER.info("Floating Ip pool created with UUID  : " + floatingIpPool.getUuid());
                 }
-            } catch (IOException e) {
-                LOGGER.info("Floating Ip pool creation failed..");
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
             }
-        } else if (originalNetwork.getRouterExternal() && !(deltaNetwork.getRouterExternal())) {
-            String floatingPoolId = virtualNetwork.getFloatingIpPools().get(0).getUuid();
-            FloatingIpPool floatingIpPool;
-            try {
-                floatingIpPool = (FloatingIpPool) apiConnector.findById(FloatingIpPool.class, floatingPoolId);
-                if (floatingIpPool != null) {
-                    apiConnector.delete(floatingIpPool);
+        } else {
+            if (virtualNetwork.getFloatingIpPools() != null) {
+                String floatingPoolId = virtualNetwork.getFloatingIpPools().get(0).getUuid();
+                FloatingIpPool floatingIpPool;
+                try {
+                    floatingIpPool = (FloatingIpPool) apiConnector.findById(FloatingIpPool.class, floatingPoolId);
+                    if (floatingIpPool != null) {
+                        apiConnector.delete(floatingIpPool);
+                    }
+                    floatingIpPool = (FloatingIpPool) apiConnector.findById(FloatingIpPool.class, floatingPoolId);
+                    if (floatingIpPool == null) {
+                        LOGGER.info("Floating Ip pool removed after update network..");
+                    } else {
+                        LOGGER.info("Floating Ip pool removal failed after update network..");
+                    }
+                } catch (IOException e) {
+                    LOGGER.info("Floating Ip pool is failed to removed after update network..");
                 }
-                floatingIpPool = (FloatingIpPool) apiConnector.findById(FloatingIpPool.class, floatingPoolId);
-                if (floatingIpPool == null) {
-                    LOGGER.info("Floating Ip pool removed after update network..");
-                } else {
-                    LOGGER.info("Floating Ip pool removal failed after update network..");
-                    return HttpURLConnection.HTTP_INTERNAL_ERROR;
-                }
-            } catch (IOException e) {
-                LOGGER.info("Floating Ip pool is failed to removed after update network..");
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
             }
         }
     }
-    return HttpURLConnection.HTTP_OK;
-}
-
 
     /**
      * Invoked to take action after a network has been updated.
@@ -347,9 +376,19 @@ public class NetworkHandler implements INeutronNetworkAware {
     @Override
     public void neutronNetworkUpdated(NeutronNetwork network) {
         try {
-            VirtualNetwork virtualnetwork = new VirtualNetwork();
-            virtualnetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, network.getNetworkUUID());
-            if (network.getNetworkName().equalsIgnoreCase(virtualnetwork.getDisplayName()) && network.getRouterExternal().equals(virtualnetwork.getRouterExternal())) {
+            String networkUUID = network.getNetworkUUID();
+            try {
+                if (!(networkUUID.contains("-"))) {
+                    networkUUID = Utils.uuidFormater(networkUUID);
+                }
+                networkUUID = UUID.fromString(networkUUID).toString();
+            } catch (Exception ex) {
+                LOGGER.error("UUID input incorrect", ex);
+            }
+            updateNetwork(network);
+            VirtualNetwork virtualnetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
+            if (network.getNetworkName().equalsIgnoreCase(virtualnetwork.getDisplayName())
+                    && network.getRouterExternal().equals(virtualnetwork.getRouterExternal())) {
                 LOGGER.info("Network updatation verified....");
             } else {
                 LOGGER.info("Network updatation failed....");
@@ -358,7 +397,6 @@ public class NetworkHandler implements INeutronNetworkAware {
             LOGGER.error("Exception :" + e);
         }
     }
-
 
     /**
      * Invoked when a network deletion is requested to indicate if the specified
@@ -372,19 +410,29 @@ public class NetworkHandler implements INeutronNetworkAware {
     public int canDeleteNetwork(NeutronNetwork network) {
         apiConnector = Activator.apiConnector;
         VirtualNetwork virtualNetwork = null;
+        String networkUUID = network.getNetworkUUID();
         try {
-            virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, network.getNetworkUUID());
+            try {
+                if (!(networkUUID.contains("-"))) {
+                    networkUUID = Utils.uuidFormater(networkUUID);
+                }
+                networkUUID = UUID.fromString(networkUUID).toString();
+            } catch (Exception ex) {
+                LOGGER.error("UUID input incorrect", ex);
+                return HttpURLConnection.HTTP_BAD_REQUEST;
+            }
+            virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
             if (virtualNetwork != null) {
-                if (virtualNetwork.getVirtualMachineInterfaceBackRefs() != null) {
-                    LOGGER.info("Network with UUID :  " + network.getNetworkUUID() + " cannot be deleted as it has port(s) associated with it....");
+                if (virtualNetwork.getVirtualMachineInterfaceBackRefs() != null || virtualNetwork.getFloatingIpPools() != null
+                        || virtualNetwork.getNetworkIpam() != null) {
+                    LOGGER.info("Network with UUID :  " + networkUUID
+                            + " cannot be deleted as it has subnet(s)/port(s)/FloatingIp Pool(s) associated with it....");
                     return HttpURLConnection.HTTP_FORBIDDEN;
                 } else {
-                    apiConnector.delete(virtualNetwork);
-                    LOGGER.info("Network with UUID :  " + network.getNetworkUUID() + "  has been deleted successfully....");
                     return HttpURLConnection.HTTP_OK;
                 }
             } else {
-                LOGGER.info("No Network exists with UUID :  " + network.getNetworkUUID());
+                LOGGER.info("No Network exists with UUID :  " + networkUUID);
                 return HttpURLConnection.HTTP_BAD_REQUEST;
             }
         } catch (Exception e) {
@@ -392,7 +440,6 @@ public class NetworkHandler implements INeutronNetworkAware {
             return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
     }
-
 
     /**
      * Invoked to take action after a network has been deleted.
@@ -404,35 +451,23 @@ public class NetworkHandler implements INeutronNetworkAware {
     public void neutronNetworkDeleted(NeutronNetwork network) {
         VirtualNetwork virtualNetwork = null;
         try {
-            virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, network.getNetworkUUID());
+            String networkUUID = network.getNetworkUUID();
+            if (!(networkUUID.contains("-"))) {
+                networkUUID = Utils.uuidFormater(networkUUID);
+            }
+            networkUUID = UUID.fromString(networkUUID).toString();
+            virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
+            apiConnector.delete(virtualNetwork);
+            LOGGER.info("Network with UUID :  " + network.getNetworkUUID() + "  has been deleted successfully....");
+            virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
             if (virtualNetwork == null) {
                 LOGGER.info("Network deletion verified....");
-            }
-            else {
+            } else {
                 LOGGER.info("Network deletion failed....");
             }
         } catch (Exception e) {
             LOGGER.error("Exception :   " + e);
         }
-    }
-
-    /**
-     * Invoked to format the UUID if UUID is not in correct format.
-     *
-     * @param String
-     *            An instance of UUID string.
-     *
-     * @return Correctly formated UUID string.
-     */
-    private String uuidFormater(String uuid) {
-        String uuidPattern = null;
-        String id1 = uuid.substring(0, 8);
-        String id2 = uuid.substring(8, 12);
-        String id3 = uuid.substring(12, 16);
-        String id4 = uuid.substring(16, 20);
-        String id5 = uuid.substring(20, 32);
-        uuidPattern = (id1 + "-" + id2 + "-" + id3 + "-" + id4 + "-" + id5);
-        return uuidPattern;
     }
 
 }

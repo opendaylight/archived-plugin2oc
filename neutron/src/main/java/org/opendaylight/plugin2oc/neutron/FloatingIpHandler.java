@@ -31,15 +31,15 @@ public class FloatingIpHandler implements INeutronFloatingIPAware {
     /**
      * Logger instance.
      */
-    static final Logger LOGGER = LoggerFactory.getLogger(PortHandler.class);
+    static final Logger LOGGER = LoggerFactory.getLogger(FloatingIpHandler.class);
     static ApiConnector apiConnector;
 
     /**
-     * Invoked when a floating ip creation is requested to check if the
-     * specified floating ip can be created.
+     * Invoked when a floating IP creation is requested to check if the
+     * specified floating IP can be created.
      *
      * @param floatingip
-     *            An instance of proposed new Neutron Floating ip object.
+     *            An instance of proposed new Neutron Floating IP object.
      *
      * @return A HTTP status code to the creation request.
      */
@@ -62,50 +62,47 @@ public class FloatingIpHandler implements INeutronFloatingIPAware {
             LOGGER.error(" Floating Ip address can not be null");
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
+        String fipUUID = fip.getFloatingIPUUID();
+        String projectUUID = fip.getTenantUUID();
+        String floatingNetworkUUID = fip.getFloatingNetworkUUID();
         try {
-            return createfloatingIp(fip);
-        } catch (Exception e) {
-            e.printStackTrace();
-            LOGGER.error("Exception :   " + e);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
-        }
-    }
-
-    /**
-     * Invoked when a floating ip creation is requested to create the floating
-     * ip
-     *
-     * @param floatingip
-     *            An instance of proposed new Neutron Floating ip object.
-     *
-     * @return A HTTP status code to the creation request.
-     */
-    private int createfloatingIp(NeutronFloatingIP neutronFloatingIp) throws IOException {
-        String projectUUID = null;
-        String floatingPoolNetworkId = null;
-        String fipId = neutronFloatingIp.getID();
-        String floatingIpaddress = neutronFloatingIp.getFloatingIPAddress();
-        try {
-            floatingPoolNetworkId = neutronFloatingIp.getFloatingNetworkUUID();
-            projectUUID = neutronFloatingIp.getTenantUUID().toString();
-            if (!(projectUUID.contains("-"))) {
-                projectUUID = uuidFormater(projectUUID);
+            if (!(fipUUID.contains("-"))) {
+                fipUUID = Utils.uuidFormater(fipUUID);
             }
+            if (!(projectUUID.contains("-"))) {
+                projectUUID = Utils.uuidFormater(projectUUID);
+            }
+            if (!(floatingNetworkUUID.contains("-"))) {
+                floatingNetworkUUID = Utils.uuidFormater(floatingNetworkUUID);
+            }
+            boolean isValidFloatingIPUUID = Utils.isValidHexNumber(fipUUID);
+            boolean isValidFloatingNetworkUUID = Utils.isValidHexNumber(floatingNetworkUUID);
+            boolean isValidprojectUUID = Utils.isValidHexNumber(projectUUID);
+            if (!isValidFloatingIPUUID || !isValidFloatingNetworkUUID || !isValidprojectUUID) {
+                LOGGER.info("Badly formed Hexadecimal UUID...");
+                return HttpURLConnection.HTTP_BAD_REQUEST;
+            }
+            fipUUID = UUID.fromString(fipUUID).toString();
             projectUUID = UUID.fromString(projectUUID).toString();
+            floatingNetworkUUID = UUID.fromString(floatingNetworkUUID).toString();
         } catch (Exception ex) {
             LOGGER.error("UUID input incorrect", ex);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
+            return HttpURLConnection.HTTP_BAD_REQUEST;
         }
-        Project project;
         try {
-            project = (Project) apiConnector.findById(Project.class, projectUUID);
+            FloatingIp floatingIpByID = (FloatingIp) apiConnector.findById(FloatingIp.class, fipUUID);
+            if (floatingIpByID != null) {
+                LOGGER.error("Floating IP already exists...");
+                return HttpURLConnection.HTTP_NOT_FOUND;
+            }
+            Project project = (Project) apiConnector.findById(Project.class, projectUUID);
             if (project == null) {
                 try {
                     Thread.currentThread();
                     Thread.sleep(3000);
-                } catch (InterruptedException interruptedException) {
-                    LOGGER.error("InterruptedException :    ", interruptedException);
-                    return HttpURLConnection.HTTP_INTERNAL_ERROR;
+                } catch (InterruptedException e) {
+                    LOGGER.error("InterruptedException :    ", e);
+                    return HttpURLConnection.HTTP_BAD_REQUEST;
                 }
                 project = (Project) apiConnector.findById(Project.class, projectUUID);
                 if (project == null) {
@@ -113,7 +110,7 @@ public class FloatingIpHandler implements INeutronFloatingIPAware {
                     return HttpURLConnection.HTTP_NOT_FOUND;
                 }
             }
-            VirtualNetwork virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, floatingPoolNetworkId);
+            VirtualNetwork virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, floatingNetworkUUID);
             if (virtualNetwork == null) {
                 LOGGER.error("Could not find Virtual network...");
                 return HttpURLConnection.HTTP_NOT_FOUND;
@@ -122,18 +119,68 @@ public class FloatingIpHandler implements INeutronFloatingIPAware {
             FloatingIpPool floatingIpPool = (FloatingIpPool) apiConnector.findById(FloatingIpPool.class, floatingPoolId);
             if (floatingIpPool == null) {
                 LOGGER.error("Could not find Floating ip pool...");
+
                 return HttpURLConnection.HTTP_NOT_FOUND;
             }
+        } catch (IOException ie) {
+            LOGGER.error("IOException :   " + ie);
+            return HttpURLConnection.HTTP_INTERNAL_ERROR;
+        } catch (Exception e) {
+            LOGGER.error("Exception :   " + e);
+            return HttpURLConnection.HTTP_INTERNAL_ERROR;
+        }
+        return HttpURLConnection.HTTP_OK;
+    }
+
+    /**
+     * Invoked when a floating IP creation is requested to create the floating
+     * IP
+     *
+     * @param floatingip
+     *            An instance of proposed new Neutron Floating IP object.
+     */
+    private void createfloatingIp(NeutronFloatingIP neutronFloatingIp) throws IOException {
+        String fipUUID = neutronFloatingIp.getFloatingIPUUID();
+        String projectUUID = neutronFloatingIp.getTenantUUID();
+        String floatingNetworkUUID = neutronFloatingIp.getFloatingNetworkUUID();
+        String floatingIpaddress = neutronFloatingIp.getFloatingIPAddress();
+        String fipPortUUID = neutronFloatingIp.getPortUUID();
+        try {
+            if (!(fipUUID.contains("-"))) {
+                fipUUID = Utils.uuidFormater(fipUUID);
+            }
+            fipUUID = UUID.fromString(fipUUID).toString();
+            if (!(projectUUID.contains("-"))) {
+                projectUUID = Utils.uuidFormater(projectUUID);
+            }
+            projectUUID = UUID.fromString(projectUUID).toString();
+            if (!(floatingNetworkUUID.contains("-"))) {
+                floatingNetworkUUID = Utils.uuidFormater(floatingNetworkUUID);
+            }
+            floatingNetworkUUID = UUID.fromString(floatingNetworkUUID).toString();
+            if (neutronFloatingIp.getPortUUID() != null) {
+                if (!(fipPortUUID.contains("-"))) {
+                    fipPortUUID = Utils.uuidFormater(fipPortUUID);
+                }
+                fipPortUUID = UUID.fromString(fipPortUUID).toString();
+            }
+        } catch (Exception ex) {
+            LOGGER.error("UUID input incorrect", ex);
+        }
+        try {
+            Project project = (Project) apiConnector.findById(Project.class, projectUUID);
+            VirtualNetwork virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, floatingNetworkUUID);
+            String floatingPoolId = virtualNetwork.getFloatingIpPools().get(0).getUuid();
+            FloatingIpPool floatingIpPool = (FloatingIpPool) apiConnector.findById(FloatingIpPool.class, floatingPoolId);
             FloatingIp floatingIp = new FloatingIp();
-            floatingIp.setUuid(fipId);
-            floatingIp.setName(fipId);
-            floatingIp.setDisplayName(fipId);
+            floatingIp.setUuid(fipUUID);
+            floatingIp.setName(fipUUID);
+            floatingIp.setDisplayName(fipUUID);
             floatingIp.setAddress(floatingIpaddress);
             floatingIp.setParent(floatingIpPool);
             floatingIp.setProject(project);
-            if (neutronFloatingIp.getPortUUID() != null) {
-                VirtualMachineInterface virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class,
-                        neutronFloatingIp.getPortUUID());
+            if (fipPortUUID != null) {
+                VirtualMachineInterface virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, fipPortUUID);
                 if (virtualMachineInterface != null) {
                     floatingIp.addVirtualMachineInterface(virtualMachineInterface);
                 }
@@ -141,127 +188,161 @@ public class FloatingIpHandler implements INeutronFloatingIPAware {
             boolean floatingIpCreaterd = apiConnector.create(floatingIp);
             if (!floatingIpCreaterd) {
                 LOGGER.warn("Floating Ip creation failed..");
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
             }
             LOGGER.info("Floating Ip : " + floatingIp.getName() + "  having UUID : " + floatingIp.getUuid() + "  sucessfully created...");
-            return HttpURLConnection.HTTP_OK;
         } catch (IOException ioEx) {
             LOGGER.error("Exception : " + ioEx);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
     }
 
     /**
-     * Invoked to take action after a floating ip has been created.
+     * Invoked to create a Floating IP and take action after the floating IP has
+     * been created.
      *
-     * @param floatingip
-     *            An instance of proposed new Neutron Floating ip object.
+     * @param floatingIP
+     *            An instance of proposed new Neutron Floating IP object.
      *
-     * @return A HTTP status code to the creation request.
      */
     @Override
     public void neutronFloatingIPCreated(NeutronFloatingIP neutronFloatingIp) {
-        FloatingIp floatingIp = null;
         try {
-            floatingIp = (FloatingIp) apiConnector.findById(FloatingIp.class, neutronFloatingIp.getFloatingIPUUID());
+            createfloatingIp(neutronFloatingIp);
+        } catch (Exception ex) {
+            LOGGER.error("Exception :   " + ex);
+        }
+        try {
+            String fipUUID = neutronFloatingIp.getFloatingIPUUID();
+            if (!(fipUUID.contains("-"))) {
+                fipUUID = Utils.uuidFormater(fipUUID);
+            }
+            fipUUID = UUID.fromString(fipUUID).toString();
+            FloatingIp floatingIp = (FloatingIp) apiConnector.findById(FloatingIp.class, fipUUID);
             if (floatingIp != null) {
                 LOGGER.info("Floating Ip creation verified....");
+            } else {
+                LOGGER.error("Floating Ip creation failed....");
             }
         } catch (Exception ex) {
             LOGGER.error("Exception :    " + ex);
         }
-
     }
 
     /**
-     * Invoked when a floating ip update is requested to indicate if the
-     * specified floating ip can be changed using the specified delta.
+     * Invoked when a floating IP update is requested to indicate if the
+     * specified floating IP can be changed using the specified delta.
      *
      * @param delta
-     *            Updates to the floating ip object using patch semantics.
+     *            Updates to the floating IP object using patch semantics.
      * @param original
-     *            An instance of the Neutron floating ip object to be updated.
+     *            An instance of the Neutron floating IP object to be updated.
      * @return A HTTP status code to the update request.
      */
     @Override
     public int canUpdateFloatingIP(NeutronFloatingIP deltaFloatingIp, NeutronFloatingIP originalFloatingIp) {
         apiConnector = Activator.apiConnector;
-        FloatingIp floatingIP = null;
-        apiConnector = Activator.apiConnector;
         if (deltaFloatingIp == null || originalFloatingIp == null) {
             LOGGER.error("Neutron Floating Ip can't be null..");
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
+        FloatingIp floatingIp = null;
+        String fipUUID = originalFloatingIp.getFloatingIPUUID();
+
         try {
-            floatingIP = (FloatingIp) apiConnector.findById(FloatingIp.class, originalFloatingIp.getFloatingIPUUID());
-        } catch (IOException e) {
-            LOGGER.error("Exception :     " + e);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
-        }
-        if (floatingIP == null) {
-            LOGGER.error("No network exists for the specified UUID...");
-            return HttpURLConnection.HTTP_FORBIDDEN;
+            if (!(fipUUID.contains("-"))) {
+                fipUUID = Utils.uuidFormater(fipUUID);
+            }
+            fipUUID = UUID.fromString(fipUUID).toString();
+        } catch (Exception ex) {
+            LOGGER.error("UUID input incorrect", ex);
+            return HttpURLConnection.HTTP_BAD_REQUEST;
         }
         try {
-            return updateFloatingIP(originalFloatingIp.getFloatingIPUUID(), deltaFloatingIp);
+            floatingIp = (FloatingIp) apiConnector.findById(FloatingIp.class, fipUUID);
+            if (floatingIp == null) {
+                LOGGER.error("No floating IP exists for the specified UUID...");
+                return HttpURLConnection.HTTP_NOT_FOUND;
+            }
         } catch (IOException ex) {
             LOGGER.error("Exception : " + ex);
             return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
-
+        return HttpURLConnection.HTTP_OK;
     }
 
     /**
-     * Invoked to update the floating ip
+     * Invoked to update the floating IP
      *
-     * @param string
-     *            An instance of floating ip UUID.
      * @param delta_floatingip
-     *            An instance of delta floating ip.
+     *            An instance of delta floating IP.
      *
-     * @return A boolean to the update request.
      * @throws IOException
      */
-    private int updateFloatingIP(String floatingIpUUID, NeutronFloatingIP deltaFloatingIp) throws IOException {
-        FloatingIp floatingIP = (FloatingIp) apiConnector.findById(FloatingIp.class, floatingIpUUID);
-        String virtualMachineInterfaceUUID = deltaFloatingIp.getPortUUID();
-        if (deltaFloatingIp.getPortUUID() != null) {
+    private void updateFloatingIP(NeutronFloatingIP neutronFloatingIp) throws IOException {
+        String fipUUID = neutronFloatingIp.getFloatingIPUUID();
+        String fipPortUUID = neutronFloatingIp.getPortUUID();
+        try {
+            if (!(fipUUID.contains("-"))) {
+                fipUUID = Utils.uuidFormater(fipUUID);
+            }
+            fipUUID = UUID.fromString(fipUUID).toString();
+            if (neutronFloatingIp.getPortUUID() != null) {
+                if (!(fipPortUUID.contains("-"))) {
+                    fipPortUUID = Utils.uuidFormater(fipPortUUID);
+                }
+                fipPortUUID = UUID.fromString(fipPortUUID).toString();
+            }
+        } catch (Exception ex) {
+            LOGGER.error("UUID input incorrect", ex);
+        }
+        FloatingIp floatingIP = (FloatingIp) apiConnector.findById(FloatingIp.class, fipUUID);
+        if (fipPortUUID != null) {
             VirtualMachineInterface virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class,
-                    virtualMachineInterfaceUUID);
+                    fipPortUUID);
             if (virtualMachineInterface != null) {
                 floatingIP.setVirtualMachineInterface(virtualMachineInterface);
             }
         }
-        if (virtualMachineInterfaceUUID == null) {
+        if (fipPortUUID == null) {
             floatingIP.clearVirtualMachineInterface();
         }
         boolean floatingIpUpdate = apiConnector.update(floatingIP);
         if (!floatingIpUpdate) {
             LOGGER.warn("Floating Ip Updation failed..");
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
         LOGGER.info("Floating Ip  having UUID : " + floatingIP.getUuid() + "  has been sucessfully updated...");
-        return HttpURLConnection.HTTP_OK;
     }
 
     /**
-     * Invoked to take action after a floating ip has been updated.
+     * Invoked to take action after a floating IP has been updated.
      *
      * @param floatingIp
-     *            An instance of modified Neutron floating ip object.
+     *            An instance of modified Neutron floating IP object.
      */
     @Override
-    public void neutronFloatingIPUpdated(NeutronFloatingIP neutronFloatingIp) {
+    public void neutronFloatingIPUpdated(NeutronFloatingIP updatedFloatingIp) {
         try {
-            FloatingIp floatingIp = (FloatingIp) apiConnector.findById(FloatingIp.class, neutronFloatingIp.getFloatingIPUUID());
-            if (neutronFloatingIp.getPortUUID() != null) {
-                if (floatingIp.getVirtualMachineInterface().get(0).getUuid().matches(neutronFloatingIp.getPortUUID())) {
-                    LOGGER.info("Floating Ip with floating UUID " + neutronFloatingIp.getFloatingIPUUID() + " is Updated successfully.");
+            updateFloatingIP(updatedFloatingIp);
+            String fipUUID = updatedFloatingIp.getFloatingIPUUID();
+            String fipPortUUID = updatedFloatingIp.getPortUUID();
+            if (!(fipUUID.contains("-"))) {
+                fipUUID = Utils.uuidFormater(fipUUID);
+            }
+            fipUUID = UUID.fromString(fipUUID).toString();
+            if (fipPortUUID != null) {
+                if (!(fipPortUUID.contains("-"))) {
+                    fipPortUUID = Utils.uuidFormater(fipPortUUID);
+                }
+                fipPortUUID = UUID.fromString(fipPortUUID).toString();
+            }
+            FloatingIp floatingIp = (FloatingIp) apiConnector.findById(FloatingIp.class, fipUUID);
+            if (fipPortUUID != null) {
+                if (floatingIp.getVirtualMachineInterface().get(0).getUuid().matches(fipPortUUID)) {
+                    LOGGER.info("Floating Ip with floating UUID " + fipUUID + " is Updated successfully.");
                 } else {
                     LOGGER.info("Floating Ip Updation failed..");
                 }
-            } else if (neutronFloatingIp.getPortUUID() == null && floatingIp.getVirtualMachineInterface() == null) {
-                LOGGER.info("Floating Ip with floating UUID " + neutronFloatingIp.getFloatingIPUUID() + " is Updated successfully.");
+            } else if (fipPortUUID == null && floatingIp.getVirtualMachineInterface() == null) {
+                LOGGER.info("Floating Ip with floating UUID " + fipUUID + " is Updated successfully.");
             } else {
                 LOGGER.info("Floating Ip Updation failed..");
             }
@@ -282,12 +363,18 @@ public class FloatingIpHandler implements INeutronFloatingIPAware {
     @Override
     public int canDeleteFloatingIP(NeutronFloatingIP neutronFloatingIp) {
         apiConnector = Activator.apiConnector;
-        if (neutronFloatingIp == null) {
-            LOGGER.error("Neutron Floating Ip can not be null.. ");
-            return HttpURLConnection.HTTP_BAD_REQUEST;
-        }
+        String fipUUID = neutronFloatingIp.getFloatingIPUUID();
         try {
-            return deleteFloatingIP(neutronFloatingIp.getFloatingIPUUID());
+            if (!(fipUUID.contains("-"))) {
+                fipUUID = Utils.uuidFormater(fipUUID);
+            }
+            fipUUID = UUID.fromString(fipUUID).toString();
+            FloatingIp floatingIp = (FloatingIp) apiConnector.findById(FloatingIp.class, fipUUID);
+            if (floatingIp == null) {
+                LOGGER.info("No Floating Ip exists with UUID :  " + fipUUID);
+                return HttpURLConnection.HTTP_NOT_FOUND;
+            }
+            return HttpURLConnection.HTTP_OK;
         } catch (IOException ioEx) {
             LOGGER.error("Exception : " + ioEx);
             return HttpURLConnection.HTTP_INTERNAL_ERROR;
@@ -298,63 +385,33 @@ public class FloatingIpHandler implements INeutronFloatingIPAware {
     }
 
     /**
-     * Invoked to delete the specified Neutron floating ip.
-     *
-     * @param String
-     *            An instance of floating ip UUID.
-     *
-     * @return A boolean to the delete request.
-     * @throws IOException
-     */
-    private int deleteFloatingIP(String neutronFloatingIp) throws IOException {
-        FloatingIp floatingIp = (FloatingIp) apiConnector.findById(FloatingIp.class, neutronFloatingIp);
-        if (floatingIp != null) {
-            apiConnector.delete(floatingIp);
-            LOGGER.info("Floating Ip with UUID :  " + floatingIp.getUuid() + "  has been deleted successfully....");
-            return HttpURLConnection.HTTP_OK;
-        } else {
-            LOGGER.info("No Floating Ip exists with UUID :  " + neutronFloatingIp);
-            return HttpURLConnection.HTTP_NOT_FOUND;
-        }
-    }
-
-    /**
      * Invoked to take action after a floatingIP has been deleted.
      *
      * @param NeutronfloatingIP
-     *            An instance of deleted floatingIP Network object.
+     *            An instance of deleted floatingIP object.
      */
     @Override
     public void neutronFloatingIPDeleted(NeutronFloatingIP neutronFloatingIp) {
-        FloatingIp fip = null;
+        String fipUUID = neutronFloatingIp.getFloatingIPUUID();
+        FloatingIp floatingIp = null;
         try {
-            fip = (FloatingIp) apiConnector.findById(FloatingIp.class, neutronFloatingIp.getFloatingIPUUID());
-            if (fip == null) {
-                LOGGER.info("Floating ip deletion verified....");
+            if (!(fipUUID.contains("-"))) {
+                fipUUID = Utils.uuidFormater(fipUUID);
             }
-        } catch (Exception e) {
-            LOGGER.error("Exception :   " + e);
+            fipUUID = UUID.fromString(fipUUID).toString();
+            floatingIp = (FloatingIp) apiConnector.findById(FloatingIp.class, fipUUID);
+            apiConnector.delete(floatingIp);
+            floatingIp = (FloatingIp) apiConnector.findById(FloatingIp.class, fipUUID);
+            if (floatingIp == null) {
+                LOGGER.info("Floating ip deletion verified....");
+            } else {
+                LOGGER.info("Floating ip deletion failed....");
+            }
+        } catch (IOException ioEx) {
+            LOGGER.error("Exception : " + ioEx);
+        } catch (Exception ex) {
+            LOGGER.error("Exception :   " + ex);
         }
-
-    }
-
-    /**
-     * Invoked to format the UUID if UUID is not in correct format.
-     *
-     * @param String
-     *            An instance of UUID string.
-     *
-     * @return Correctly formated UUID string.
-     */
-    private String uuidFormater(String uuid) {
-        String uuidPattern = null;
-        String id1 = uuid.substring(0, 8);
-        String id2 = uuid.substring(8, 12);
-        String id3 = uuid.substring(12, 16);
-        String id4 = uuid.substring(16, 20);
-        String id5 = uuid.substring(20, 32);
-        uuidPattern = (id1 + "-" + id2 + "-" + id3 + "-" + id4 + "-" + id5);
-        return uuidPattern;
     }
 
 }

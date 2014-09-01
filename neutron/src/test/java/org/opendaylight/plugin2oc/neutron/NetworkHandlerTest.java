@@ -12,7 +12,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.powermock.api.easymock.PowerMock.expectNew;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -30,24 +29,18 @@ import net.juniper.contrail.api.types.VirtualNetwork;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mockito;
+
 import org.opendaylight.controller.networkconfig.neutron.NeutronNetwork;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 /**
  * Test Class for Neutron Network.
  */
-@PrepareForTest({ NetworkHandler.class, VirtualNetwork.class })
-@RunWith(PowerMockRunner.class)
+
 public class NetworkHandlerTest {
     NetworkHandler networkHandler;
     NetworkHandler mockednetworkHandler = mock(NetworkHandler.class);
     NeutronNetwork mockedNeutronNetwork = mock(NeutronNetwork.class);
     ApiConnector mockedApiConnector = mock(ApiConnector.class);
-    ApiConnector mockedApiConnector1 = Mockito.mock(ApiConnector.class);
     VirtualNetwork mockedVirtualNetwork = mock(VirtualNetwork.class);
     Project mockedProject = mock(Project.class);
     FloatingIpPool mockedFloatingIpPool = mock(FloatingIpPool.class);
@@ -100,7 +93,7 @@ public class NetworkHandlerTest {
         return deltaNetwork;
     }
 
-    /* dummy params for Nfloating IP */
+    /* dummy params for floating IP */
     public FloatingIpPool defaultFloatingIpPoolObject() {
         FloatingIpPool floatingIpPoolObj = new FloatingIpPool();
         String fipId = UUID.randomUUID().toString();
@@ -161,51 +154,58 @@ public class NetworkHandlerTest {
         assertEquals(HttpURLConnection.HTTP_NOT_FOUND, networkHandler.canCreateNetwork(neutronNetwork));
     }
 
-    /* Test method to check neutron network with virtual network Existence */
+    /*
+     * Test method to check neutron network create with same name
+     */
     @Test
-    public void testCanCreateNetworkVirtualNetworkExists() throws IOException {
+    public void testcanCreateNetworkByNameExist() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronNetwork neutronNetwork = defaultNeutronObject();
-        when(mockedApiConnector.findById(VirtualNetwork.class, neutronNetwork.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
         when(mockedApiConnector.findById(Project.class, neutronNetwork.getTenantID())).thenReturn(mockedProject);
+        when(mockedApiConnector.findByName(VirtualNetwork.class, mockedProject, neutronNetwork.getNetworkName())).thenReturn("network-001");
         assertEquals(HttpURLConnection.HTTP_FORBIDDEN, networkHandler.canCreateNetwork(neutronNetwork));
     }
 
-    /* Test method to check neutron network create Failed */
+    /*
+     * Test method to check neutron can create network OK
+     */
     @Test
-    public void testCanCreateNetworkFailed() throws Exception {
+    public void testcanCreateNetworkOK() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronNetwork neutronNetwork = defaultNeutronObject();
         when(mockedApiConnector.findById(Project.class, neutronNetwork.getTenantID())).thenReturn(mockedProject);
-        when(mockedApiConnector.findById(VirtualNetwork.class, neutronNetwork.getNetworkUUID())).thenReturn(null);
-        VirtualNetwork mockedVirtualNet = PowerMock.createNiceMock(VirtualNetwork.class);
-        expectNew(VirtualNetwork.class).andReturn(mockedVirtualNet);
-        when(mockedApiConnector.findById(Project.class, neutronNetwork.getTenantID())).thenReturn(mockedProject);
-        when(mockedApiConnector.create(mockedVirtualNet)).thenReturn(false);
-        PowerMock.replay(mockedVirtualNet, VirtualNetwork.class);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, networkHandler.canCreateNetwork(neutronNetwork));
-    }
-
-    /* Test method to check neutron network create with HTTP OK */
-    @Test
-    public void testCanCreateNetworkOK() throws Exception {
-        Activator.apiConnector = mockedApiConnector;
-        NeutronNetwork neutronNetwork = defaultNeutronObject();
-        when(mockedApiConnector.findById(Project.class, neutronNetwork.getTenantID())).thenReturn(mockedProject);
-        when(mockedApiConnector.findById(VirtualNetwork.class, neutronNetwork.getNetworkUUID())).thenReturn(null);
-        VirtualNetwork mockedVirtualNet = PowerMock.createNiceMock(VirtualNetwork.class);
-        expectNew(VirtualNetwork.class).andReturn(mockedVirtualNet);
-        when(mockedApiConnector.findById(Project.class, neutronNetwork.getTenantID())).thenReturn(mockedProject);
-        when(mockedApiConnector.create(mockedVirtualNet)).thenReturn(true);
-        PowerMock.replay(mockedVirtualNet, VirtualNetwork.class);
+        when(mockedApiConnector.findByName(VirtualNetwork.class, mockedProject, neutronNetwork.getNetworkName())).thenReturn(null);
         assertEquals(HttpURLConnection.HTTP_OK, networkHandler.canCreateNetwork(neutronNetwork));
     }
 
-    /* Test method to check if neutron network is null */
+    /* Test method to check if neutron network object is null */
     @Test
     public void testCanUpdateNetworkNull() {
         Activator.apiConnector = mockedApiConnector;
         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, networkHandler.canUpdateNetwork(null, null));
+    }
+
+    /* Test method to check if neutron network name is empty string */
+    @Test
+    public void testCanUpdateNetworkNameEmpty() {
+        Activator.apiConnector = mockedApiConnector;
+        NeutronNetwork neutronNetwork = defaultNeutronObject();
+        NeutronNetwork deltaNeutronNetwork = defaultNeutronObjectUpdate();
+        deltaNeutronNetwork.setNetworkName("");
+        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, networkHandler.canUpdateNetwork(deltaNeutronNetwork, neutronNetwork));
+    }
+
+    /*
+     * Test method to check neutron network update with same name
+     */
+    @Test
+    public void testcanUpdateNetworkByNameExist() throws IOException {
+        Activator.apiConnector = mockedApiConnector;
+        NeutronNetwork neutronNetwork = defaultNeutronObject();
+        NeutronNetwork deltaNeutronNetwork = defaultNeutronObjectUpdate();
+        when(mockedApiConnector.findById(Project.class, neutronNetwork.getTenantID())).thenReturn(mockedProject);
+        when(mockedApiConnector.findByName(VirtualNetwork.class, mockedProject, neutronNetwork.getNetworkName())).thenReturn("network-001");
+        assertEquals(HttpURLConnection.HTTP_FORBIDDEN, networkHandler.canUpdateNetwork(deltaNeutronNetwork, neutronNetwork));
     }
 
     /*
@@ -216,138 +216,25 @@ public class NetworkHandlerTest {
         Activator.apiConnector = mockedApiConnector;
         NeutronNetwork neutronNetwork = defaultNeutronObject();
         NeutronNetwork deltaNeutronNetwork = defaultNeutronObjectUpdate();
+        when(mockedApiConnector.findById(Project.class, neutronNetwork.getTenantID())).thenReturn(mockedProject);
+        when(mockedApiConnector.findByName(VirtualNetwork.class, mockedProject, neutronNetwork.getNetworkName())).thenReturn(null);
         when(mockedApiConnector.findById(VirtualNetwork.class, neutronNetwork.getNetworkUUID())).thenReturn(null);
         assertEquals(HttpURLConnection.HTTP_FORBIDDEN, networkHandler.canUpdateNetwork(deltaNeutronNetwork, neutronNetwork));
     }
 
-    /* Test method to check if neutron network update OK */
-    @Test
-    public void testCanUpdateNetworkFailed() throws Exception {
-        Activator.apiConnector = mockedApiConnector;
-        NeutronNetwork neutronNetwork = defaultNeutronObject();
-        NeutronNetwork deltaNeutronNetwork = defaultNeutronObjectUpdate();
-        when(mockedApiConnector.findById(VirtualNetwork.class, neutronNetwork.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
-        when(mockedApiConnector.update(mockedVirtualNetwork)).thenReturn(false);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, networkHandler.canUpdateNetwork(deltaNeutronNetwork, neutronNetwork));
-    }
-
-    /* Test method to check if neutron network update create Foating IP failed */
-    @Test
-    public void testCanUpdateNetworkCreateFloatingIpFailed() throws Exception {
-        Activator.apiConnector = mockedApiConnector;
-        NeutronNetwork neutronNetwork = defaultNeutronObject();
-        NeutronNetwork deltaNeutronNetwork = defaultNeutronObjectUpdate();
-        when(mockedApiConnector.findById(VirtualNetwork.class, neutronNetwork.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
-        when(mockedApiConnector.update(mockedVirtualNetwork)).thenReturn(true);
-        neutronNetwork.setRouterExternal(false);
-        deltaNeutronNetwork.setRouterExternal(true);
-        when(mockedApiConnector.findById(VirtualNetwork.class, mockedVirtualNetwork.getUuid())).thenReturn(mockedVirtualNetwork);
-        FloatingIpPool floatingIpPool = PowerMock.createNiceMock(FloatingIpPool.class);
-        expectNew(FloatingIpPool.class).andReturn(floatingIpPool);
-        floatingIpPool.setParent(mockedVirtualNetwork);
-        when(mockedApiConnector.create(floatingIpPool)).thenReturn(false);
-        PowerMock.replay(floatingIpPool, FloatingIpPool.class);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, networkHandler.canUpdateNetwork(deltaNeutronNetwork, neutronNetwork));
-
-    }
-
     /*
-     * Test method to check neutron network updated successfully after
-     * floatingIP created
+     * Test method to check if neutron network update with OK
      */
     @Test
-    public void testCanUpdateNetworkOKif() throws Exception {
+    public void testCanUpdateNetworkVirtualNetworkOK() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronNetwork neutronNetwork = defaultNeutronObject();
-        NeutronNetwork deltaNetwork = defaultNeutronObjectUpdate();
+        NeutronNetwork deltaNeutronNetwork = defaultNeutronObjectUpdate();
+        when(mockedApiConnector.findById(Project.class, neutronNetwork.getTenantID())).thenReturn(mockedProject);
+        when(mockedApiConnector.findByName(VirtualNetwork.class, mockedProject, neutronNetwork.getNetworkName())).thenReturn(null);
         when(mockedApiConnector.findById(VirtualNetwork.class, neutronNetwork.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
-        mockedVirtualNetwork.setName(deltaNetwork.getNetworkName());
-        mockedVirtualNetwork.setDisplayName(deltaNetwork.getNetworkName());
-        when(mockedApiConnector.update(mockedVirtualNetwork)).thenReturn(true);
-        neutronNetwork.setRouterExternal(false);
-        deltaNetwork.setRouterExternal(true);
-        when(mockedApiConnector.findById(VirtualNetwork.class, mockedVirtualNetwork.getUuid())).thenReturn(mockedVirtualNetwork);
-        FloatingIpPool floatingIpPool = PowerMock.createNiceMock(FloatingIpPool.class);
-        expectNew(FloatingIpPool.class).andReturn(floatingIpPool);
-        String fipId = UUID.randomUUID().toString();
-        floatingIpPool.setName(fipId);
-        floatingIpPool.setDisplayName(fipId);
-        floatingIpPool.setUuid(fipId);
-        floatingIpPool.setParent(mockedVirtualNetwork);
-        when(mockedApiConnector.create(floatingIpPool)).thenReturn(true);
-        PowerMock.replay(floatingIpPool, FloatingIpPool.class);
-        assertEquals(HttpURLConnection.HTTP_OK, networkHandler.canUpdateNetwork(deltaNetwork, neutronNetwork));
+        assertEquals(HttpURLConnection.HTTP_OK, networkHandler.canUpdateNetwork(deltaNeutronNetwork, neutronNetwork));
     }
-
-    // /* Test method to check neutron network updated failed due to Floating Ip
-    // pool is failed to removed after update network..*/
-    // @Test
-    // public void testupdateNetworkFloatingIPremoveFailed() throws Exception {
-    // Activator.apiConnector = mockedApiConnector;
-    // NeutronNetwork neutronNetwork = defaultNeutronObject();
-    // NeutronNetwork deltaNetwork =defaultNeutronObjectUpdate();
-    // when(mockedApiConnector.findById(VirtualNetwork.class,neutronNetwork.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
-    // mockedVirtualNetwork.setName(deltaNetwork.getNetworkName());
-    // mockedVirtualNetwork.setDisplayName(deltaNetwork.getNetworkName());
-    // when(mockedApiConnector.update(mockedVirtualNetwork)).thenReturn(true);
-    // neutronNetwork.setRouterExternal(true);
-    // deltaNetwork.setRouterExternal(false);
-    // ObjectReference<ApiPropertyBase> ref = new ObjectReference<>();
-    // List<ObjectReference<ApiPropertyBase>> pool = new
-    // ArrayList<ObjectReference<ApiPropertyBase>>();
-    // FloatingIpPool fp = new FloatingIpPool();
-    // List<String> temp = new ArrayList<String>();
-    // for (int i = 0; i < 1; i++) {
-    // String fipId = UUID.randomUUID().toString();
-    // fp.setDisplayName(fipId);
-    // fp.setName(fipId);
-    // fp.setUuid(fipId);
-    // ref.setReference(temp,"", "",""); //To do do not have api property base
-    // reference
-    // pool.add(i, ref);
-    // }
-    // when(mockedVirtualNetwork.getFloatingIpPools().get(0).getUuid()).thenReturn("000570f2-17b1-4fc3-99ec-1b7f7778a29a");
-    // when(mockedApiConnector.findById(FloatingIpPool.class,mockedVirtualNetwork.getFloatingIpPools().get(0).getUuid())).thenReturn(mockedFloatingIpPool);
-    // when(mockedApiConnector.findById(FloatingIpPool.class,mockedVirtualNetwork.getFloatingIpPools().get(0).getUuid())).thenReturn(mockedFloatingIpPool);
-    // PowerMock.replay(floatingIpPool, FloatingIpPool.class);
-    // assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR,networkHandler.canUpdateNetwork(deltaNetwork,
-    // neutronNetwork));
-    // }
-
-    // /* Test method to check neutron network updated successfully after
-    // floatingIP removal..*/
-    // @Test
-    // public void testupdateNetworkOKelse() throws Exception {
-    // Activator.apiConnector = mockedApiConnector;
-    // NeutronNetwork neutronNetwork = defaultNeutronObject();
-    // NeutronNetwork deltaNetwork =defaultNeutronObjectUpdate();
-    // when(mockedApiConnector.findById(VirtualNetwork.class,neutronNetwork.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
-    // mockedVirtualNetwork.setName(deltaNetwork.getNetworkName());
-    // mockedVirtualNetwork.setDisplayName(deltaNetwork.getNetworkName());
-    // when(mockedApiConnector.update(mockedVirtualNetwork)).thenReturn(true);
-    // neutronNetwork.setRouterExternal(true);
-    // deltaNetwork.setRouterExternal(false);
-    // ObjectReference<ApiPropertyBase> ref = new ObjectReference<>();
-    // List<ObjectReference<ApiPropertyBase>> pool = new
-    // ArrayList<ObjectReference<ApiPropertyBase>>();
-    // FloatingIpPool fp = new FloatingIpPool();
-    // List<String> temp = new ArrayList<String>();
-    // for (int i = 0; i < 1; i++) {
-    // String fipId = UUID.randomUUID().toString();
-    // fp.setDisplayName(fipId);
-    // fp.setName(fipId);
-    // fp.setUuid(fipId);
-    // ref.setReference(temp,"", "","");//To do do not have api property base
-    // reference
-    // pool.add(i, ref);
-    // }
-    // when(mockedVirtualNetwork.getFloatingIpPools().get(0).getUuid()).thenReturn("000570f2-17b1-4fc3-99ec-1b7f7778a29a");
-    // when(mockedApiConnector.findById(FloatingIpPool.class,mockedVirtualNetwork.getFloatingIpPools().get(0).getUuid())).thenReturn(mockedFloatingIpPool);
-    // when(mockedApiConnector.findById(FloatingIpPool.class,mockedVirtualNetwork.getFloatingIpPools().get(0).getUuid())).thenReturn(null);
-    //
-    // assertEquals(HttpURLConnection.HTTP_OK,
-    // networkHandler.canUpdateNetwork(deltaNetwork, neutronNetwork));
-    // }
 
     /* Test method to check delete network with when Port exist */
     @Test
@@ -373,18 +260,16 @@ public class NetworkHandlerTest {
     }
 
     /*
-     * Test method to check neutron network creation of virtual network failed
+     * Test method to check neutron network deletion with Ok
      */
     @Test
-    public void testcreateNetworkVirtualNetworkFalse() throws Exception {
+    public void testcanDeleteNetworkOK() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronNetwork neutronNetwork = defaultNeutronObject();
-        VirtualNetwork mockedVirtualNet = PowerMock.createNiceMock(VirtualNetwork.class);
-        expectNew(VirtualNetwork.class).andReturn(mockedVirtualNet);
-        when(mockedApiConnector.findById(Project.class, neutronNetwork.getTenantID())).thenReturn(mockedProject);
-        when(mockedApiConnector.create(mockedVirtualNet)).thenReturn(false);
-        PowerMock.replay(mockedVirtualNet, VirtualNetwork.class);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, networkHandler.canCreateNetwork(neutronNetwork));
+        when(mockedApiConnector.findById(VirtualNetwork.class, neutronNetwork.getNetworkUUID())).thenReturn(mockedVirtualNetwork);
+        List<ObjectReference<ApiPropertyBase>> test = new ArrayList<ObjectReference<ApiPropertyBase>>();
+        when(mockedVirtualNetwork.getVirtualMachineInterfaceBackRefs()).thenReturn(test);
+        assertEquals(HttpURLConnection.HTTP_FORBIDDEN, networkHandler.canDeleteNetwork(neutronNetwork));
     }
 
 }

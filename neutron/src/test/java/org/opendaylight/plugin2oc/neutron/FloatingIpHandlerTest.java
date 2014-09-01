@@ -1,3 +1,11 @@
+/*
+ * Copyright (C) 2014 Juniper Networks, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v1.0 which accompanies this distribution,
+ * and is available at http://www.eclipse.org/legal/epl-v10.html
+ *
+ */
 package org.opendaylight.plugin2oc.neutron;
 
 import static org.junit.Assert.assertEquals;
@@ -6,8 +14,12 @@ import static org.mockito.Mockito.mock;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.util.ArrayList;
+import java.util.List;
 
 import net.juniper.contrail.api.ApiConnector;
+import net.juniper.contrail.api.ApiPropertyBase;
+import net.juniper.contrail.api.ObjectReference;
 import net.juniper.contrail.api.types.FloatingIp;
 import net.juniper.contrail.api.types.FloatingIpPool;
 import net.juniper.contrail.api.types.Project;
@@ -20,7 +32,9 @@ import org.junit.Test;
 import static org.mockito.Mockito.when;
 
 import org.opendaylight.controller.networkconfig.neutron.NeutronFloatingIP;
-
+/**
+ * Test Class for Neutron FloatingIp.
+ */
 public class FloatingIpHandlerTest {
 
     FloatingIpHandler floatingIphandler;
@@ -91,25 +105,36 @@ public class FloatingIpHandlerTest {
     @Test
     public void testCanCreateFloatingIPUuidNull() {
         Activator.apiConnector = mockedApiConnector;
-        when(mockedNeutronFloatingIP.getFloatingIPUUID()).thenReturn("");
-        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, floatingIphandler.canCreateFloatingIP(mockedNeutronFloatingIP));
+        NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
+        neutronFloatingIP.setFloatingIPUUID("");
+        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, floatingIphandler.canCreateFloatingIP(neutronFloatingIP));
     }
 
     /* Test method to check if neutron Tenant UUID is null */
     @Test
     public void testCanCreateTenantUUIDNull() {
         Activator.apiConnector = mockedApiConnector;
-        when(mockedNeutronFloatingIP.getTenantUUID()).thenReturn(null);
-        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, floatingIphandler.canCreateFloatingIP(mockedNeutronFloatingIP));
+        NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
+        neutronFloatingIP.setTenantUUID(null);
+        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, floatingIphandler.canCreateFloatingIP(neutronFloatingIP));
     }
 
     /* Test method to check if neutron Floating IP Address is null */
     @Test
     public void testCanCreateFloatingIPAddressNull() {
         Activator.apiConnector = mockedApiConnector;
-        when(mockedNeutronFloatingIP.getTenantUUID()).thenReturn("100071fe-0216-46bc-a3e6-1ff582fbd329");
-        when(mockedNeutronFloatingIP.getFloatingIPAddress()).thenReturn(null);
-        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, floatingIphandler.canCreateFloatingIP(mockedNeutronFloatingIP));
+        NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
+        neutronFloatingIP.setFloatingIPAddress(null);
+        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, floatingIphandler.canCreateFloatingIP(neutronFloatingIP));
+    }
+
+    /* Test method to check if neutron Floating IP canCreate FIP already exist */
+    @Test
+    public void testCanCreateFloatingIPExist() throws IOException {
+        Activator.apiConnector = mockedApiConnector;
+        NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
+        when(mockedApiConnector.findById(FloatingIp.class, neutronFloatingIP.getFloatingNetworkUUID())).thenReturn(mockedFloatingIp);
+        assertEquals(HttpURLConnection.HTTP_NOT_FOUND, floatingIphandler.canCreateFloatingIP(neutronFloatingIP));
     }
 
     /* Test method to check if neutron Floating IP canCreate project is null */
@@ -117,35 +142,54 @@ public class FloatingIpHandlerTest {
     public void testCanCreateFloatingProjectNull() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
+        when(mockedApiConnector.findById(FloatingIp.class, neutronFloatingIP.getFloatingNetworkUUID())).thenReturn(null);
         when(mockedApiConnector.findById(Project.class, neutronFloatingIP.getTenantUUID())).thenReturn(null);
         assertEquals(HttpURLConnection.HTTP_NOT_FOUND, floatingIphandler.canCreateFloatingIP(neutronFloatingIP));
     }
 
-    /* Test method to check if neutron Floating IP canCreate project is null */
+    /*Test method to check if neutron Floating IP canCreate Virtual network not found*/
     @Test
-    public void testCanCreateFloatingVirtualNetworkNull() throws IOException {
+    public void testCanCreateFloatingVirtualNetNotFound() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
+        when(mockedApiConnector.findById(FloatingIp.class, neutronFloatingIP.getFloatingNetworkUUID())).thenReturn(mockedFloatingIp);
         when(mockedApiConnector.findById(Project.class, neutronFloatingIP.getTenantUUID())).thenReturn(mockProject);
         when(mockedApiConnector.findById(VirtualNetwork.class, neutronFloatingIP.getFloatingNetworkUUID())).thenReturn(null);
         assertEquals(HttpURLConnection.HTTP_NOT_FOUND, floatingIphandler.canCreateFloatingIP(neutronFloatingIP));
     }
 
-    // /* Test method to check if neutron Floating IP canCreate project is
-    // null*/
-    // @Test
-    // public void testCanCreateFloatingIpNull() throws IOException {
-    // Activator.apiConnector = mockedApiConnector;
-    // NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
-    // when(mockedApiConnector.findById(Project.class,
-    // neutronFloatingIP.getTenantUUID())).thenReturn(mockProject);
-    // when(mockedApiConnector.findById(VirtualNetwork.class,
-    // neutronFloatingIP.getFloatingNetworkUUID())).thenReturn(mockedVirtualNetwork);
-    // when(mockedApiConnector.findById(FloatingIpPool.class,
-    // mockedVirtualNetwork.getFloatingIpPools().get(0).getUuid())).thenReturn(null);
-    // assertEquals(HttpURLConnection.HTTP_NOT_FOUND,
-    // floatingIphandler.canCreateFloatingIP(neutronFloatingIP));
-    // }
+    /* Test method to check if canCreate neutron Floating ip pool cannot not find */
+    @Test
+       public void testCanCreateFloatingIpPoolNull() throws IOException {
+               Activator.apiConnector = mockedApiConnector;
+               NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
+               when(mockedApiConnector.findById(FloatingIp.class,neutronFloatingIP.getFloatingIPUUID())).thenReturn(null);
+               when(mockedApiConnector.findById(Project.class,neutronFloatingIP.getTenantUUID())).thenReturn(mockProject);
+               when(mockedApiConnector.findById(VirtualNetwork.class,neutronFloatingIP.getFloatingNetworkUUID())).thenReturn(mockedVirtualNetwork);
+               List<ObjectReference<ApiPropertyBase>> fipPoolList = new ArrayList<ObjectReference<ApiPropertyBase>>();
+               fipPoolList.add(new ObjectReference<ApiPropertyBase>(mockFloatingIpPool.getQualifiedName(), null));
+               fipPoolList.get(0).setReference(mockFloatingIpPool.getQualifiedName(), null, "", "119570f2-17b1-4fc3-99ec-1b7f7778a29a");
+               when(mockedVirtualNetwork.getFloatingIpPools()).thenReturn(fipPoolList);
+               when(mockedApiConnector.findById(FloatingIpPool.class,mockedVirtualNetwork.getFloatingIpPools().get(0).getUuid())).thenReturn(null);
+               assertEquals(HttpURLConnection.HTTP_NOT_FOUND,floatingIphandler.canCreateFloatingIP(neutronFloatingIP));
+       }
+
+    /* Test method to check if canCreate neutron Floating ip pool return 200 ok */
+    @Test
+       public void testCanCreateFloatingIpOk() throws IOException {
+               Activator.apiConnector = mockedApiConnector;
+               NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
+               when(mockedApiConnector.findById(FloatingIp.class,neutronFloatingIP.getFloatingIPUUID())).thenReturn(null);
+               when(mockedApiConnector.findById(Project.class,neutronFloatingIP.getTenantUUID())).thenReturn(mockProject);
+               when(mockedApiConnector.findById(VirtualNetwork.class,neutronFloatingIP.getFloatingNetworkUUID())).thenReturn(mockedVirtualNetwork);
+               List<ObjectReference<ApiPropertyBase>> fipPoolList = new ArrayList<ObjectReference<ApiPropertyBase>>();
+               fipPoolList.add(new ObjectReference<ApiPropertyBase>(mockFloatingIpPool.getQualifiedName(), null));
+               fipPoolList.get(0).setReference(mockFloatingIpPool.getQualifiedName(), null, "", "119570f2-17b1-4fc3-99ec-1b7f7778a29a");
+               when(mockedVirtualNetwork.getFloatingIpPools()).thenReturn(fipPoolList);
+               when(mockedApiConnector.findById(FloatingIpPool.class,mockedVirtualNetwork.getFloatingIpPools().get(0).getUuid())).thenReturn(mockFloatingIpPool);
+               assertEquals(HttpURLConnection.HTTP_OK,floatingIphandler.canCreateFloatingIP(neutronFloatingIP));
+       }
+
     /* Test method to check if can update FloatingIP Null object */
     @Test
     public void testcanUpdateFloatingIPObjNull() throws IOException {
@@ -153,45 +197,24 @@ public class FloatingIpHandlerTest {
         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, floatingIphandler.canUpdateFloatingIP(null, null));
     }
 
-    /* Test method to check if can update FloatingIP Null */
+    /* Test method to check if can update FloatingIP obj not found */
     @Test
     public void testcanUpdateFloatingIPNull() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
         NeutronFloatingIP deltaNeutronFloatingIP = deltaNeutronObjectUpdate();
         when(mockedApiConnector.findById(FloatingIp.class, neutronFloatingIP.getFloatingIPUUID())).thenReturn(null);
-        assertEquals(HttpURLConnection.HTTP_FORBIDDEN, floatingIphandler.canUpdateFloatingIP(deltaNeutronFloatingIP, neutronFloatingIP));
+        assertEquals(HttpURLConnection.HTTP_NOT_FOUND, floatingIphandler.canUpdateFloatingIP(deltaNeutronFloatingIP, neutronFloatingIP));
     }
 
-    /* Test method to check if can update FloatingIP failed */
+    /* Test method to check if can update FloatingIP return status OK */
     @Test
-    public void testcanUpdateFloatingIPFailed() throws IOException {
+    public void testcanUpdateFloatingIPOK() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
         NeutronFloatingIP deltaNeutronFloatingIP = deltaNeutronObjectUpdate();
-        deltaNeutronFloatingIP.setPortUUID(null);
         when(mockedApiConnector.findById(FloatingIp.class, neutronFloatingIP.getFloatingIPUUID())).thenReturn(mockedFloatingIp);
-        when(mockedApiConnector.update(mockedFloatingIp)).thenReturn(false);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, floatingIphandler.canUpdateFloatingIP(deltaNeutronFloatingIP, neutronFloatingIP));
-    }
-
-    /* Test method to check if can update FloatingIP updated */
-    @Test
-    public void testcanUpdateFloatingIPTrue() throws IOException {
-        Activator.apiConnector = mockedApiConnector;
-        NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
-        NeutronFloatingIP deltaNeutronFloatingIP = deltaNeutronObjectUpdate();
-        deltaNeutronFloatingIP.setPortUUID(null);
-        when(mockedApiConnector.findById(FloatingIp.class, neutronFloatingIP.getFloatingIPUUID())).thenReturn(mockedFloatingIp);
-        when(mockedApiConnector.update(mockedFloatingIp)).thenReturn(true);
         assertEquals(HttpURLConnection.HTTP_OK, floatingIphandler.canUpdateFloatingIP(deltaNeutronFloatingIP, neutronFloatingIP));
-    }
-
-    /* Test method to check if can delete FloatingIP Null object */
-    @Test
-    public void testcanDeleteFloatingIPObjNull() throws IOException {
-        Activator.apiConnector = mockedApiConnector;
-        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, floatingIphandler.canDeleteFloatingIP(null));
     }
 
     /* Test method to check if can delete FloatingIP not found */
@@ -201,5 +224,14 @@ public class FloatingIpHandlerTest {
         NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
         when(mockedApiConnector.findById(FloatingIp.class, neutronFloatingIP.getFloatingIPUUID())).thenReturn(null);
         assertEquals(HttpURLConnection.HTTP_NOT_FOUND, floatingIphandler.canDeleteFloatingIP(neutronFloatingIP));
+    }
+
+    /* Test method to check if can delete FloatingIP returns status 200 ok */
+    @Test
+    public void testcanDeleteFloatingIPOK() throws IOException {
+        Activator.apiConnector = mockedApiConnector;
+        NeutronFloatingIP neutronFloatingIP = defaultNeutronObject();
+        when(mockedApiConnector.findById(FloatingIp.class, neutronFloatingIP.getFloatingIPUUID())).thenReturn(mockedFloatingIp);
+        assertEquals(HttpURLConnection.HTTP_OK, floatingIphandler.canDeleteFloatingIP(neutronFloatingIP));
     }
 }

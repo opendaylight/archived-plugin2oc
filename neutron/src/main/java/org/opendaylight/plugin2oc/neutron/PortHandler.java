@@ -10,6 +10,7 @@ package org.opendaylight.plugin2oc.neutron;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -58,42 +59,110 @@ public class PortHandler implements INeutronPortAware {
             LOGGER.error("NeutronPort object can't be null..");
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
-        if (neutronPort.getID().equals("")) {
-            LOGGER.error("Port Device Id or Port Uuid can't be empty/null...");
+        if (neutronPort.getPortUUID() == null || neutronPort.getPortUUID().equals("")) {
+            LOGGER.error("Port Uuid can't be empty/null...");
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
         if (neutronPort.getTenantID() == null) {
             LOGGER.error("Tenant ID can't be null...");
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
-
-        List<Neutron_IPs> ips = neutronPort.getFixedIPs();
-        if (ips == null) {
-            LOGGER.warn("Neutron Fixed Ips can't be null..");
-            return HttpURLConnection.HTTP_FORBIDDEN;
+        if (neutronPort.getName() == null || neutronPort.getName().equals("")) {
+            LOGGER.error("Port Name can't be empty/null...");
+            return HttpURLConnection.HTTP_BAD_REQUEST;
         }
         try {
-            return createPort(neutronPort);
+            String portUUID = neutronPort.getPortUUID();
+            String projectUUID = neutronPort.getTenantID();
+            String deviceUUID = neutronPort.getDeviceID();
+            String networkUUID = neutronPort.getNetworkUUID();
+            try {
+                if (!(portUUID.contains("-"))) {
+                    portUUID = Utils.uuidFormater(portUUID);
+                }
+                if (!(projectUUID.contains("-"))) {
+                    projectUUID = Utils.uuidFormater(projectUUID);
+                }
+                if (!(networkUUID.contains("-"))) {
+                    networkUUID = Utils.uuidFormater(networkUUID);
+                }
+                if (deviceUUID != null && !(("").equals(deviceUUID))) {
+                    if (!(deviceUUID.contains("-"))) {
+                        deviceUUID = Utils.uuidFormater(deviceUUID);
+                    }
+                    boolean isValidDeviceUUID = Utils.isValidHexNumber(deviceUUID);
+                    if (!isValidDeviceUUID) {
+                        LOGGER.info("Badly formed Hexadecimal UUID...");
+                        return HttpURLConnection.HTTP_BAD_REQUEST;
+                    }
+                    deviceUUID = UUID.fromString(deviceUUID).toString();
+                }
+                boolean isValidNetworkUUID = Utils.isValidHexNumber(networkUUID);
+                boolean isValidProjectUUID = Utils.isValidHexNumber(projectUUID);
+                boolean isValidPortUUID = Utils.isValidHexNumber(portUUID);
+                if (!isValidPortUUID || !isValidProjectUUID || !isValidNetworkUUID) {
+                    LOGGER.info("Badly formed Hexadecimal UUID...");
+                    return HttpURLConnection.HTTP_BAD_REQUEST;
+                }
+                portUUID = UUID.fromString(portUUID).toString();
+                projectUUID = UUID.fromString(projectUUID).toString();
+                networkUUID = UUID.fromString(networkUUID).toString();
+
+            } catch (Exception ex) {
+                LOGGER.error("UUID input incorrect", ex);
+                return HttpURLConnection.HTTP_BAD_REQUEST;
+            }
+            Project project = (Project) apiConnector.findById(Project.class, projectUUID);
+            if (project == null) {
+                try {
+                    Thread.currentThread();
+                    Thread.sleep(3000);
+                } catch (InterruptedException e) {
+                    LOGGER.error("InterruptedException :    ", e);
+                    return HttpURLConnection.HTTP_BAD_REQUEST;
+                }
+                project = (Project) apiConnector.findById(Project.class, projectUUID);
+                if (project == null) {
+                    LOGGER.error("Could not find projectUUID...");
+                    return HttpURLConnection.HTTP_NOT_FOUND;
+                }
+            }
+            VirtualNetwork virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
+            if (!virtualNetwork.getParentUuid().matches(projectUUID)) {
+                LOGGER.info("Port and Network should belong to same tenant...");
+                return HttpURLConnection.HTTP_BAD_REQUEST;
+            }
+            VirtualMachineInterface virtualMAchineInterfaceByID = (VirtualMachineInterface)apiConnector.findById(VirtualMachineInterface.class, portUUID);
+            if (virtualMAchineInterfaceByID != null) {
+                LOGGER.warn("Port already exists with UUID : " + virtualMAchineInterfaceByID);
+                return HttpURLConnection.HTTP_FORBIDDEN;
+            }
+            String virtualMAchineInterfaceByName = apiConnector.findByName(VirtualMachineInterface.class, project, neutronPort.getName());
+            if (virtualMAchineInterfaceByName != null) {
+                LOGGER.warn("Port already exists with Name : " + virtualMAchineInterfaceByName);
+                return HttpURLConnection.HTTP_FORBIDDEN;
+            }
+        } catch (IOException ie) {
+            LOGGER.error("IOException :   " + ie);
+            return HttpURLConnection.HTTP_INTERNAL_ERROR;
         } catch (Exception e) {
-            LOGGER.error("exception :   ", e);
+            LOGGER.error("Exception :   " + e);
             return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
+        return HttpURLConnection.HTTP_OK;
     }
 
     /**
      * Invoked to create the specified Neutron port.
      *
-     * @param network
+     * @param neutronPort
      *            An instance of new Neutron Port object.
-     *
-     * @return A HTTP status code to the creation request.
      */
-    private int createPort(NeutronPort neutronPort) {
-        String networkID = neutronPort.getNetworkUUID();
-        String portID = neutronPort.getID();
-//        String portDesc = neutronPort.getID();
-        String deviceID = neutronPort.getDeviceID();
-        String projectID = neutronPort.getTenantID();
+    private void createPort(NeutronPort neutronPort) {
+        String networkUUID = neutronPort.getNetworkUUID();
+        String portUUID = neutronPort.getPortUUID();
+        String deviceUUID = neutronPort.getDeviceID();
+        String projectUUID = neutronPort.getTenantID();
         String portMACAddress = neutronPort.getMacAddress();
         String portName = neutronPort.getName();
         VirtualMachineInterface virtualMachineInterface = null;
@@ -102,141 +171,124 @@ public class PortHandler implements INeutronPortAware {
         Project project = null;
         MacAddressesType macAddressesType = new MacAddressesType();
         try {
-            networkID = UUID.fromString(neutronPort.getNetworkUUID()).toString();
-            portID = UUID.fromString(neutronPort.getID()).toString();
-            if (neutronPort.getDeviceID() != null && !(("").equals(neutronPort.getDeviceID()))) {
-                if (!(deviceID.contains("-"))) {
-                    deviceID = uuidFormater(deviceID);
+            if (!(networkUUID.contains("-"))) {
+                networkUUID = Utils.uuidFormater(networkUUID);
+            }
+            networkUUID = UUID.fromString(networkUUID).toString();
+            if (deviceUUID != null && !(("").equals(deviceUUID))) {
+                if (!(deviceUUID.contains("-"))) {
+                    deviceUUID = Utils.uuidFormater(deviceUUID);
                 }
-                deviceID = UUID.fromString(deviceID).toString();
+                deviceUUID = UUID.fromString(deviceUUID).toString();
             }
-            if (!(projectID.contains("-"))) {
-                projectID = uuidFormater(projectID);
+            if (!(projectUUID.contains("-"))) {
+                projectUUID = Utils.uuidFormater(projectUUID);
             }
-            projectID = UUID.fromString(projectID).toString();
+            projectUUID = UUID.fromString(projectUUID).toString();
+            if (!(portUUID.contains("-"))) {
+                portUUID = Utils.uuidFormater(portUUID);
+            }
+            portUUID = UUID.fromString(portUUID).toString();
         } catch (Exception ex) {
-            LOGGER.error("exception :   ", ex);
-            return HttpURLConnection.HTTP_BAD_REQUEST;
+            LOGGER.error("UUID input incorrect", ex);
         }
         try {
-            LOGGER.debug("portId:    " + portID);
-            virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, portID);
-            if (virtualMachineInterface != null) {
-                LOGGER.warn("Port already exist.");
-                return HttpURLConnection.HTTP_FORBIDDEN;
-            } else {
-                if (deviceID != null && !(("").equals(deviceID))) {
-                    virtualMachine = (VirtualMachine) apiConnector.findById(VirtualMachine.class, deviceID);
-                    LOGGER.debug("virtualMachine:   " + virtualMachine);
-                    if (virtualMachine == null) {
-                        virtualMachine = new VirtualMachine();
-                        virtualMachine.setName(deviceID+"--"+portName);
-                        virtualMachine.setUuid(deviceID);
-                        boolean virtualMachineCreated = apiConnector.create(virtualMachine);
-                        LOGGER.debug("virtualMachineCreated: " + virtualMachineCreated);
-                        if (!virtualMachineCreated) {
-                            LOGGER.warn("virtualMachine creation failed..");
-                            return HttpURLConnection.HTTP_INTERNAL_ERROR;
-                        }
-                        LOGGER.info("virtualMachine : " + virtualMachine.getName() + "  having UUID : " + virtualMachine.getUuid()
-                                + "  sucessfully created...");
+            LOGGER.info("portId:    " + portUUID);
+            if (deviceUUID != null && !(("").equals(deviceUUID))) {
+                virtualMachine = (VirtualMachine) apiConnector.findById(VirtualMachine.class, deviceUUID);
+                LOGGER.debug("virtualMachine:   " + virtualMachine);
+                if (virtualMachine == null) {
+                    virtualMachine = new VirtualMachine();
+                    virtualMachine.setName(deviceUUID);
+                    virtualMachine.setUuid(deviceUUID);
+                    boolean virtualMachineCreated = apiConnector.create(virtualMachine);
+                    LOGGER.debug("virtualMachineCreated: " + virtualMachineCreated);
+                    if (!virtualMachineCreated) {
+                        LOGGER.warn("virtualMachine creation failed..");
                     }
+                    LOGGER.info("virtualMachine : " + virtualMachine.getName() + "  having UUID : " + virtualMachine.getUuid()
+                            + "  sucessfully created...");
                 }
-                project = (Project) apiConnector.findById(Project.class, projectID);
-                if (project == null) {
-                    try {
-                        Thread.currentThread();
-                        Thread.sleep(3000);
-                    } catch (InterruptedException e) {
-                        LOGGER.error("InterruptedException :      ", e);
-                    }
-                    project = (Project) apiConnector.findById(Project.class, projectID);
-                    if (project == null) {
-                        LOGGER.error("Could not find projectUUID...");
-                        return HttpURLConnection.HTTP_NOT_FOUND;
-                    }
-                }
-                virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkID);
-                LOGGER.info("virtualNetwork: " + virtualNetwork);
-                if (virtualNetwork == null) {
-                    LOGGER.warn("virtualNetwork does not exist..");
-                    return HttpURLConnection.HTTP_BAD_REQUEST;
-                } else {
-                    virtualMachineInterface = new VirtualMachineInterface();
-                    virtualMachineInterface.setUuid(portID);
-                    virtualMachineInterface.setName(portName);
-                    virtualMachineInterface.setParent(project);
-                    virtualMachineInterface.setVirtualNetwork(virtualNetwork);
-                    macAddressesType.addMacAddress(portMACAddress);
-                    virtualMachineInterface.setMacAddresses(macAddressesType);
-                    if (deviceID != null && !(("").equals(deviceID))) {
-                        virtualMachineInterface.setVirtualMachine(virtualMachine);
-                    }
-                    boolean virtualMachineInterfaceCreated = apiConnector.create(virtualMachineInterface);
-                    if (!virtualMachineInterfaceCreated) {
-                        LOGGER.warn("actual virtualMachineInterface creation failed..");
-                        return HttpURLConnection.HTTP_INTERNAL_ERROR;
-                    }
-                    LOGGER.info("virtualMachineInterface : " + virtualMachineInterface.getName() + "  having UUID : "
-                            + virtualMachineInterface.getUuid() + "  sucessfully created...");
-                }
-
             }
-            INeutronSubnetCRUD systemCRUD = NeutronCRUDInterfaces.getINeutronSubnetCRUD(this);
-            NeutronSubnet subnet = null;
+            project = (Project) apiConnector.findById(Project.class, projectUUID);
+            virtualNetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
+            LOGGER.debug("virtualNetwork: " + virtualNetwork);
+            virtualMachineInterface = new VirtualMachineInterface();
+            virtualMachineInterface.setUuid(portUUID);
+            virtualMachineInterface.setName(portName);
+            virtualMachineInterface.setDisplayName(portName);
+            virtualMachineInterface.setParent(project);
+            virtualMachineInterface.setVirtualNetwork(virtualNetwork);
+            macAddressesType.addMacAddress(portMACAddress);
+            virtualMachineInterface.setMacAddresses(macAddressesType);
+            if (deviceUUID != null && !(("").equals(deviceUUID))) {
+                virtualMachineInterface.setVirtualMachine(virtualMachine);
+            }
+            boolean virtualMachineInterfaceCreated = apiConnector.create(virtualMachineInterface);
+            if (!virtualMachineInterfaceCreated) {
+                LOGGER.warn("actual virtualMachineInterface creation failed..");
+            }
+            LOGGER.info("virtualMachineInterface : " + virtualMachineInterface.getName() + "  having UUID : " + virtualMachineInterface.getUuid()
+                    + "  sucessfully created...");
             List<Neutron_IPs> ips = neutronPort.getFixedIPs();
-            InstanceIp instanceIp = new InstanceIp();
-            String instaneIpUuid = UUID.randomUUID().toString();
-            for (Neutron_IPs ipValues : ips) {
-                if (ipValues.getIpAddress() == null) {
-                    subnet = systemCRUD.getSubnet(ipValues.getSubnetUUID());
-                    instanceIp.setAddress(subnet.getLowAddr());
-                } else {
-                    instanceIp.setAddress(ipValues.getIpAddress());
+            if (ips != null) {
+                for (Neutron_IPs ipValues : ips) {
+                    INeutronSubnetCRUD systemCRUD = NeutronCRUDInterfaces.getINeutronSubnetCRUD(this);
+                    NeutronSubnet subnet = null;
+                    InstanceIp instanceIp = new InstanceIp();
+                    String instaneIpUuid = UUID.randomUUID().toString();
+                    if (ipValues.getIpAddress() == null) {
+                        subnet = systemCRUD.getSubnet(ipValues.getSubnetUUID());
+                        instanceIp.setAddress(subnet.getLowAddr());
+                    } else {
+                        instanceIp.setAddress(ipValues.getIpAddress());
+                    }
+                    instanceIp.setName(instaneIpUuid);
+                    instanceIp.setUuid(instaneIpUuid);
+                    instanceIp.setParent(virtualMachineInterface);
+                    instanceIp.setVirtualMachineInterface(virtualMachineInterface);
+                    instanceIp.setVirtualNetwork(virtualNetwork);
+
+                    boolean instanceIpCreated = apiConnector.create(instanceIp);
+                    if (!instanceIpCreated) {
+                        LOGGER.warn("instanceIp addition failed..");
+                    }
+                    LOGGER.info("Instance IP " + instanceIp.getAddress() + " added sucessfully...");
                 }
             }
-
-            instanceIp.setName(instaneIpUuid);
-            instanceIp.setUuid(instaneIpUuid);
-            instanceIp.setParent(virtualMachineInterface);
-            instanceIp.setVirtualMachineInterface(virtualMachineInterface);
-            instanceIp.setVirtualNetwork(virtualNetwork);
-
-            boolean instanceIpCreated = apiConnector.create(instanceIp);
-            if (!instanceIpCreated) {
-                LOGGER.warn("instanceIp addition failed..");
-                return HttpURLConnection.HTTP_INTERNAL_ERROR;
-            }
-            LOGGER.info("Instance IP added sucessfully...");
-            return HttpURLConnection.HTTP_OK;
         } catch (IOException ie) {
             LOGGER.error("IOException :    ", ie);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
     }
 
     /**
-     * Invoked to take action after a port has been created.
+     * Invoked to create a port and take action after the port has been created.
      *
      * @param network
      *            An instance of new Neutron port object.
      */
     @Override
     public void neutronPortCreated(NeutronPort neutronPort) {
-        VirtualMachineInterface virtualMachineInterface = null;
         try {
-            virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID());
+            createPort(neutronPort);
+            String portUUID = neutronPort.getPortUUID();
+            if (!(portUUID.contains("-"))) {
+                portUUID = Utils.uuidFormater(portUUID);
+            }
+            portUUID = UUID.fromString(portUUID).toString();
+            VirtualMachineInterface virtualMachineInterface = (VirtualMachineInterface) apiConnector
+                    .findById(VirtualMachineInterface.class, portUUID);
             if (virtualMachineInterface != null) {
                 LOGGER.info("Port creation verified....");
             }
-        } catch (Exception e) {
-            LOGGER.error("Exception :    " + e);
+        } catch (Exception ex) {
+            LOGGER.error("Exception :    " + ex);
         }
     }
 
     /**
      * Invoked when a port deletion is requested to check if the specified Port
-     * can be deleted and then delete the port
+     * can be deleted
      *
      * @param NeutronPort
      *            An instance of proposed Neutron Port object.
@@ -249,10 +301,29 @@ public class PortHandler implements INeutronPortAware {
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
         apiConnector = Activator.apiConnector;
+        String portUUID = neutronPort.getPortUUID();
+        if (!(portUUID.contains("-"))) {
+            portUUID = Utils.uuidFormater(portUUID);
+        }
+        portUUID = UUID.fromString(portUUID).toString();
         try {
-            return deletePort(neutronPort);
-        } catch (Exception e) {
-            LOGGER.error("exception :   ", e);
+            VirtualMachineInterface virtualMachineInterface = (VirtualMachineInterface) apiConnector
+                    .findById(VirtualMachineInterface.class, portUUID);
+
+            if (virtualMachineInterface == null) {
+                LOGGER.error("No port exists for specified UUID...");
+                return HttpURLConnection.HTTP_NOT_FOUND;
+            } else {
+                List<ObjectReference<ApiPropertyBase>> vmi = new ArrayList<ObjectReference<ApiPropertyBase>>();
+                vmi = virtualMachineInterface.getFloatingIpBackRefs();
+                if (vmi != null) {
+                    LOGGER.info("Port has floating Ip associated with it...");
+                    return HttpURLConnection.HTTP_BAD_REQUEST;
+                }
+                return HttpURLConnection.HTTP_OK;
+            }
+        } catch (Exception ioEx) {
+            LOGGER.error("IOException :   ", ioEx);
             return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
     }
@@ -260,68 +331,80 @@ public class PortHandler implements INeutronPortAware {
     /**
      * Invoked to delete the specified Neutron port.
      *
-     * @param network
+     * @param neutronPort
      *            An instance of new Neutron Port object.
-     *
-     * @return A HTTP status code to the deletion request.
      */
-    private int deletePort(NeutronPort neutronPort) {
-        String portID = neutronPort.getID();
-        String deviceID = neutronPort.getDeviceID();
+    private void deletePort(NeutronPort neutronPort) {
+        String portUUID = neutronPort.getPortUUID();
+        String deviceUUID = neutronPort.getDeviceID();
         VirtualMachineInterface virtualMachineInterface = null;
         VirtualMachine virtualMachine = null;
         InstanceIp instanceIP = null;
         List<ObjectReference<ApiPropertyBase>> virtualMachineInterfaceBackRefs = null;
         try {
-            virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, portID);
-            if (virtualMachineInterface == null) {
-                LOGGER.info("Specified port does not exist...");
-                return HttpURLConnection.HTTP_BAD_REQUEST;
-            } else {
-                List<ObjectReference<ApiPropertyBase>> instanceIPs = virtualMachineInterface.getInstanceIpBackRefs();
-                if (instanceIPs != null) {
-                    for (ObjectReference<ApiPropertyBase> ref : instanceIPs) {
-                        String instanceIPUUID = ref.getUuid();
-                        if (instanceIPUUID != null) {
-                            instanceIP = (InstanceIp) apiConnector.findById(InstanceIp.class, instanceIPUUID);
-                            apiConnector.delete(instanceIP);
-                        }
+            try {
+                if (deviceUUID != null && !(("").equals(deviceUUID))) {
+                    if (!(deviceUUID.contains("-"))) {
+                        deviceUUID = Utils.uuidFormater(deviceUUID);
                     }
+                    deviceUUID = UUID.fromString(deviceUUID).toString();
                 }
-                apiConnector.delete(virtualMachineInterface);
-                virtualMachine = (VirtualMachine) apiConnector.findById(VirtualMachine.class, deviceID);
-                if (virtualMachine != null) {
-                    virtualMachineInterfaceBackRefs = virtualMachine.getVirtualMachineInterfaceBackRefs();
-                    if (virtualMachineInterfaceBackRefs == null) {
-                        apiConnector.delete(virtualMachine);
-                    }
+                if (!(portUUID.contains("-"))) {
+                    portUUID = Utils.uuidFormater(portUUID);
                 }
-                LOGGER.info("Specified port deleted sucessfully...");
-                return HttpURLConnection.HTTP_OK;
+                portUUID = UUID.fromString(portUUID).toString();
+            } catch (Exception ex) {
+                LOGGER.error("UUID input incorrect", ex);
             }
+            virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, portUUID);
+            List<ObjectReference<ApiPropertyBase>> instanceIPs = virtualMachineInterface.getInstanceIpBackRefs();
+            if (instanceIPs != null) {
+                for (ObjectReference<ApiPropertyBase> ref : instanceIPs) {
+                    String instanceIPUUID = ref.getUuid();
+                    if (instanceIPUUID != null) {
+                        instanceIP = (InstanceIp) apiConnector.findById(InstanceIp.class, instanceIPUUID);
+                        apiConnector.delete(instanceIP);
+                    }
+                }
+            }
+            apiConnector.delete(virtualMachineInterface);
+            virtualMachine = (VirtualMachine) apiConnector.findById(VirtualMachine.class, deviceUUID);
+            if (virtualMachine != null) {
+                virtualMachineInterfaceBackRefs = virtualMachine.getVirtualMachineInterfaceBackRefs();
+                if (virtualMachineInterfaceBackRefs == null) {
+                    apiConnector.delete(virtualMachine);
+                }
+            }
+            LOGGER.info("Specified port deleted sucessfully...");
         } catch (IOException io) {
             LOGGER.error("Exception  :   " + io);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
         } catch (Exception e) {
             LOGGER.error("Exception  :   " + e);
-            return HttpURLConnection.HTTP_INTERNAL_ERROR;
         }
     }
 
     /**
      * Invoked to take action after a port has been deleted.
      *
-     * @param network
+     * @param neutronPort
      *            An instance of new Neutron port object.
      */
     @Override
     public void neutronPortDeleted(NeutronPort neutronPort) {
-        VirtualMachineInterface virtualMachineInterface = new VirtualMachineInterface();
         try {
-            virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID());
+            deletePort(neutronPort);
+            String portUUID = neutronPort.getPortUUID();
+            if (!(portUUID.contains("-"))) {
+                portUUID = Utils.uuidFormater(portUUID);
+            }
+            portUUID = UUID.fromString(portUUID).toString();
+            VirtualMachineInterface virtualMachineInterface = (VirtualMachineInterface) apiConnector
+                    .findById(VirtualMachineInterface.class, portUUID);
             if (virtualMachineInterface == null) {
                 LOGGER.info("Port deletion verified....");
             }
+        } catch (IOException ioEx) {
+            LOGGER.error("Exception :    " + ioEx);
         } catch (Exception e) {
             LOGGER.error("Exception :    " + e);
         }
@@ -329,7 +412,7 @@ public class PortHandler implements INeutronPortAware {
 
     /**
      * Invoked when a port update is requested to indicate if the specified port
-     * can be updated using the specified delta and update the port
+     * can be updated using the specified delta
      *
      * @param delta
      *            Updates to the port object using patch semantics.
@@ -341,7 +424,6 @@ public class PortHandler implements INeutronPortAware {
     @Override
     public int canUpdatePort(NeutronPort deltaPort, NeutronPort originalPort) {
         apiConnector = Activator.apiConnector;
-        VirtualMachineInterface virtualMachineInterface = null;
         if (deltaPort == null || originalPort == null) {
             LOGGER.error("Neutron Port objects can't be null..");
             return HttpURLConnection.HTTP_BAD_REQUEST;
@@ -351,8 +433,68 @@ public class PortHandler implements INeutronPortAware {
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
         try {
-            virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, originalPort.getPortUUID());
-            return updatePort(deltaPort, virtualMachineInterface, originalPort);
+            String portUUID = originalPort.getPortUUID();
+            String networkUUID = deltaPort.getNetworkUUID();
+            String projectUUID = originalPort.getTenantID();
+            List<Neutron_IPs> fixedIPs = deltaPort.getFixedIPs();
+            if (!(portUUID.contains("-"))) {
+                portUUID = Utils.uuidFormater(portUUID);
+            }
+            portUUID = UUID.fromString(portUUID).toString();
+            if (!(projectUUID.contains("-"))) {
+                projectUUID = Utils.uuidFormater(projectUUID);
+            }
+            projectUUID = UUID.fromString(projectUUID).toString();
+            Project project = (Project) apiConnector.findById(Project.class, projectUUID);
+            VirtualMachineInterface virtualMachineInterface = (VirtualMachineInterface) apiConnector
+                    .findById(VirtualMachineInterface.class, portUUID);
+            if (virtualMachineInterface == null) {
+                LOGGER.error("No port exists for specified UUID...");
+                return HttpURLConnection.HTTP_NOT_FOUND;
+            }
+            String virtualMachineInterfaceByName = apiConnector.findByName(VirtualMachineInterface.class, project, deltaPort.getName());
+            if (virtualMachineInterfaceByName != null) {
+                LOGGER.warn("Port already exists with UUID : " + virtualMachineInterfaceByName);
+                return HttpURLConnection.HTTP_FORBIDDEN;
+            }
+            if (networkUUID != null && !(("").equals(networkUUID))) {
+                if (!(networkUUID.contains("-"))) {
+                    networkUUID = Utils.uuidFormater(networkUUID);
+                }
+                networkUUID = UUID.fromString(networkUUID).toString();
+            }
+            VirtualNetwork virtualnetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
+            if (networkUUID != null && fixedIPs == null) {
+                LOGGER.error("Subnet UUID must exist in the network..");
+                return HttpURLConnection.HTTP_BAD_REQUEST;
+            }
+            if (fixedIPs != null) {
+                if (virtualnetwork.getNetworkIpam() != null) {
+                    for (Neutron_IPs fixedIp : fixedIPs) {
+                        for (ObjectReference<VnSubnetsType> ref : virtualnetwork.getNetworkIpam()) {
+                            VnSubnetsType vnSubnetsType = ref.getAttr();
+                            if (vnSubnetsType != null) {
+                                List<VnSubnetsType.IpamSubnetType> subnets = vnSubnetsType.getIpamSubnets();
+                                if (subnets != null) {
+                                    for (VnSubnetsType.IpamSubnetType subnetValue : subnets) {
+                                        String subnetUUID = fixedIp.getSubnetUUID();
+                                        if (!(subnetUUID.contains("-"))) {
+                                            subnetUUID = Utils.uuidFormater(subnetUUID);
+                                        }
+                                        subnetUUID = UUID.fromString(subnetUUID).toString();
+                                        Boolean doesSubnetExist = subnetValue.getSubnetUuid().matches(subnetUUID);
+                                        if (!doesSubnetExist) {
+                                            LOGGER.error("Subnet UUID must exist in the network..");
+                                            return HttpURLConnection.HTTP_BAD_REQUEST;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return HttpURLConnection.HTTP_OK;
         } catch (IOException ie) {
             LOGGER.error("IOException:     " + ie);
             return HttpURLConnection.HTTP_INTERNAL_ERROR;
@@ -365,61 +507,73 @@ public class PortHandler implements INeutronPortAware {
     /**
      * Invoked to update the port
      *
-     * @param delta_network
+     * @param delta_neutronPort
      *            An instance of Neutron Port.
-     * @param An
-     *            instance of new {@link VirtualMachineInterface} object.
-     *
-     * @return A HTTP status code to the updation request.
      */
-    private int updatePort(NeutronPort deltaPort, VirtualMachineInterface virtualMachineInterface, NeutronPort originalPort) throws IOException {
-        VirtualMachine virtualMachine = null;
-        String deviceID = deltaPort.getDeviceID();
-        String portName = deltaPort.getName();
-        List<Neutron_IPs> fixedIPs = deltaPort.getFixedIPs();
+    private void updatePort(NeutronPort neutronPort) throws IOException {
+        String deviceUUID = neutronPort.getDeviceID();
+        String portName = neutronPort.getName();
+        String portUUID = neutronPort.getPortUUID();
+        String networkUUID = neutronPort.getNetworkUUID();
+        List<Neutron_IPs> fixedIPs = neutronPort.getFixedIPs();
         boolean instanceIpUpdate = false;
-        String networkUUID = deltaPort.getNetworkUUID();
+        VirtualMachineInterface virtualMachineInterface = null;
+        VirtualMachine virtualMachine = null;
         VirtualNetwork virtualnetwork = null;
-        if (fixedIPs != null) {
-            if (networkUUID == null) {
-                for (ObjectReference<ApiPropertyBase> networks : virtualMachineInterface.getVirtualNetwork()) {
-                    networkUUID = networks.getUuid();
+        try {
+            if (!(portUUID.contains("-"))) {
+                portUUID = Utils.uuidFormater(portUUID);
+            }
+            portUUID = UUID.fromString(portUUID).toString();
+            if (!(networkUUID.contains("-"))) {
+                networkUUID = Utils.uuidFormater(networkUUID);
+            }
+            networkUUID = UUID.fromString(networkUUID).toString();
+            if (deviceUUID != null) {
+                if (!(deviceUUID.contains("-"))) {
+                    deviceUUID = Utils.uuidFormater(deviceUUID);
                 }
+                deviceUUID = UUID.fromString(deviceUUID).toString();
             }
-            boolean subnetExist = false;
-            virtualnetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
-            if (virtualnetwork == null) {
-                LOGGER.error(" Virtual network does not exist");
-                return HttpURLConnection.HTTP_FORBIDDEN;
-            }
-            if (virtualnetwork != null && virtualnetwork.getNetworkIpam() != null) {
-                for (Neutron_IPs fixedIp : fixedIPs) {
-                    for (ObjectReference<VnSubnetsType> ref : virtualnetwork.getNetworkIpam()) {
-                        VnSubnetsType vnSubnetsType = ref.getAttr();
-                        if (vnSubnetsType != null) {
-                            List<VnSubnetsType.IpamSubnetType> subnets = vnSubnetsType.getIpamSubnets();
-                            if (subnets != null) {
-                                for (VnSubnetsType.IpamSubnetType subnetValue : subnets) {
-                                    Boolean doesSubnetExist = subnetValue.getSubnetUuid().matches(fixedIp.getSubnetUUID());
-                                    if (doesSubnetExist) {
-                                        subnetExist = true;
-                                        for (ObjectReference<ApiPropertyBase> instanceIp : virtualMachineInterface.getInstanceIpBackRefs()) {
-                                            InstanceIp instanceIpLocal = (InstanceIp) apiConnector.findById(InstanceIp.class, instanceIp.getUuid());
-                                            instanceIpLocal.setVirtualNetwork(virtualnetwork);
-                                            INeutronSubnetCRUD systemCRUD = NeutronCRUDInterfaces.getINeutronSubnetCRUD(this);
-                                            NeutronSubnet subnet = null;
-                                            for (Neutron_IPs ip : originalPort.getFixedIPs()) {
-                                                subnet = systemCRUD.getSubnet(ip.getSubnetUUID());
-                                                subnet.releaseIP(ip.getIpAddress());
+            virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, portUUID);
+
+            if (fixedIPs != null) {
+                virtualnetwork = (VirtualNetwork) apiConnector.findById(VirtualNetwork.class, networkUUID);
+                if (virtualnetwork.getNetworkIpam() != null) {
+                    for (Neutron_IPs fixedIp : fixedIPs) {
+                        for (ObjectReference<VnSubnetsType> ref : virtualnetwork.getNetworkIpam()) {
+                            VnSubnetsType vnSubnetsType = ref.getAttr();
+                            if (vnSubnetsType != null) {
+                                List<VnSubnetsType.IpamSubnetType> subnets = vnSubnetsType.getIpamSubnets();
+                                if (subnets != null) {
+                                    for (VnSubnetsType.IpamSubnetType subnetValue : subnets) {
+                                        String subnetUUID = fixedIp.getSubnetUUID();
+                                        if (!(subnetUUID.contains("-"))) {
+                                            subnetUUID = Utils.uuidFormater(subnetUUID);
+                                        }
+                                        subnetUUID = UUID.fromString(subnetUUID).toString();
+                                        Boolean doesSubnetExist = subnetValue.getSubnetUuid().matches(subnetUUID);
+                                        if (doesSubnetExist) {
+                                            // subnetExist = true;
+                                            for (ObjectReference<ApiPropertyBase> instanceIp : virtualMachineInterface.getInstanceIpBackRefs()) {
+                                                InstanceIp instanceIpLocal = (InstanceIp) apiConnector.findById(InstanceIp.class,
+                                                        instanceIp.getUuid());
+                                                instanceIpLocal.setVirtualNetwork(virtualnetwork);
+                                                INeutronSubnetCRUD systemCRUD = NeutronCRUDInterfaces.getINeutronSubnetCRUD(this);
+                                                NeutronSubnet subnet = null;
+                                                for (Neutron_IPs ip : neutronPort.getFixedIPs()) {
+                                                    subnet = systemCRUD.getSubnet(ip.getSubnetUUID());
+                                                    subnet.releaseIP(ip.getIpAddress());
+                                                }
+                                                if (fixedIp.getIpAddress() == null) {
+                                                    subnet = systemCRUD.getSubnet(fixedIp.getSubnetUUID());
+                                                    instanceIpLocal.setAddress(subnet.getLowAddr());
+                                                } else {
+                                                    instanceIpLocal.setAddress(fixedIp.getIpAddress());
+                                                }
+                                                instanceIpUpdate = apiConnector.update(instanceIpLocal);
+                                                virtualMachineInterface.setVirtualNetwork(virtualnetwork);
                                             }
-                                            if (fixedIp.getIpAddress() == null) {
-                                                subnet = systemCRUD.getSubnet(fixedIp.getSubnetUUID());
-                                                instanceIpLocal.setAddress(subnet.getLowAddr());
-                                            } else {
-                                                instanceIpLocal.setAddress(fixedIp.getIpAddress());
-                                            }
-                                            instanceIpUpdate = apiConnector.update(instanceIpLocal);
-                                            virtualMachineInterface.setVirtualNetwork(virtualnetwork);
                                         }
                                     }
                                 }
@@ -428,110 +582,97 @@ public class PortHandler implements INeutronPortAware {
                     }
                 }
             }
-            if (!subnetExist) {
-                LOGGER.error("Subnet UUID must exist in the network..");
-                return HttpURLConnection.HTTP_BAD_REQUEST;
-            }
-        } else if (networkUUID != null && fixedIPs == null) {
-            LOGGER.error("Subnet UUID must exist in the network..");
-            return HttpURLConnection.HTTP_BAD_REQUEST;
-        }
-        if (deviceID != null) {
-            if (("").equals(deviceID)) {
-                virtualMachineInterface.clearVirtualMachine();
-            } else {
-                deviceID = UUID.fromString(deltaPort.getDeviceID()).toString();
-                try {
-                    virtualMachine = (VirtualMachine) apiConnector.findById(VirtualMachine.class, deviceID);
-                } catch (Exception e) {
-                    LOGGER.error("Exception:     " + e);
-                    return HttpURLConnection.HTTP_INTERNAL_ERROR;
-                }
-                if (virtualMachine == null) {
-                    virtualMachine = new VirtualMachine();
-                    virtualMachine.setName(deviceID);
-                    virtualMachine.setUuid(deviceID);
-                    boolean virtualMachineCreated = apiConnector.create(virtualMachine);
-                    LOGGER.debug("virtualMachineCreated: " + virtualMachineCreated);
-                    if (!virtualMachineCreated) {
-                        LOGGER.warn("virtualMachine creation failed..");
-                        return HttpURLConnection.HTTP_INTERNAL_ERROR;
+            if (deviceUUID != null) {
+                if (("").equals(deviceUUID)) {
+                    virtualMachineInterface.clearVirtualMachine();
+                } else {
+                    try {
+                        virtualMachine = (VirtualMachine) apiConnector.findById(VirtualMachine.class, deviceUUID);
+                    } catch (IOException ioEx) {
+                        LOGGER.error("Exception:     " + ioEx);
+                    } catch (Exception ex) {
+                        LOGGER.error("Exception:     " + ex);
                     }
-                    LOGGER.info("virtualMachine : " + virtualMachine.getName() + "  having UUID : " + virtualMachine.getUuid()
-                            + "  sucessfully created...");
-                }
-                virtualMachineInterface.setVirtualMachine(virtualMachine);
-            }
-        }
-        if(deviceID == null){
-            virtualMachineInterface.clearVirtualMachine();
-        }
-        if (portName != null) {
-            virtualMachineInterface.setDisplayName(portName);
-        }
-        if ((deviceID != null && !(("").equals(deviceID))) || portName != null || instanceIpUpdate ) {
-            if ((deviceID != null && !(("").equals(deviceID))) || portName != null) {
-                boolean portUpdate = apiConnector.update(virtualMachineInterface);
-                if (!portUpdate) {
-                    LOGGER.warn("Port Updation failed..");
-                    return HttpURLConnection.HTTP_INTERNAL_ERROR;
+                    if (virtualMachine == null) {
+                        virtualMachine = new VirtualMachine();
+                        virtualMachine.setName(deviceUUID);
+                        virtualMachine.setUuid(deviceUUID);
+                        boolean virtualMachineCreated = apiConnector.create(virtualMachine);
+                        LOGGER.debug("virtualMachineCreated: " + virtualMachineCreated);
+                        if (!virtualMachineCreated) {
+                            LOGGER.warn("virtualMachine creation failed..");
+                        }
+                        LOGGER.info("virtualMachine : " + virtualMachine.getName() + "  having UUID : " + virtualMachine.getUuid()
+                                + "  sucessfully created...");
+                    }
+                    virtualMachineInterface.setVirtualMachine(virtualMachine);
                 }
             }
-            LOGGER.info("Port having UUID : " + virtualMachineInterface.getUuid() + "  has been sucessfully updated...");
-            return HttpURLConnection.HTTP_OK;
-        } else {
-            LOGGER.info("Nothing to update...");
-            return HttpURLConnection.HTTP_BAD_REQUEST;
+            if (deviceUUID == null) {
+                virtualMachineInterface.clearVirtualMachine();
+            }
+            if (portName != null) {
+                virtualMachineInterface.setDisplayName(portName);
+            }
+            if ((deviceUUID != null && !(("").equals(deviceUUID))) || portName != null || instanceIpUpdate) {
+                if ((deviceUUID != null && !(("").equals(deviceUUID))) || portName != null) {
+                    boolean portUpdate = apiConnector.update(virtualMachineInterface);
+                    if (!portUpdate) {
+                        LOGGER.warn("Port Updation failed..");
+                    }
+                }
+                LOGGER.info("Port having UUID : " + virtualMachineInterface.getUuid() + "  has been sucessfully updated...");
+            } else {
+                LOGGER.info("Nothing to update...");
+            }
+        } catch (Exception ex) {
+            LOGGER.error("Exception  :    " + ex);
         }
     }
 
     /**
      * Invoked to take action after a port has been updated.
      *
-     * @param network
+     * @param updatedPort
      *            An instance of modified Neutron Port object.
      */
     @Override
-    public void neutronPortUpdated(NeutronPort neutronPort) {
+    public void neutronPortUpdated(NeutronPort updatedPort) {
+        String deviceUUID = updatedPort.getDeviceID();
+        String portUUID = updatedPort.getPortUUID();
         try {
-            VirtualMachineInterface virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class, neutronPort.getPortUUID());
-            if (neutronPort.getDeviceID() == null) { // TODO : VM Refs not getting cleared correctly - to be fixed
-                if (neutronPort.getName().matches(virtualMachineInterface.getDisplayName()) && virtualMachineInterface.getVirtualMachine() == null) {
-                    LOGGER.info("Port updatation verified....");
+            updatePort(updatedPort);
+            try {
+                if (!(portUUID.contains("-"))) {
+                    portUUID = Utils.uuidFormater(portUUID);
                 }
-            } else if (neutronPort.getDeviceID() != null && neutronPort.getName().matches(virtualMachineInterface.getDisplayName())
-                    && neutronPort.getDeviceID().matches(virtualMachineInterface.getVirtualMachine().get(0).getUuid())) {
-                LOGGER.info("Port updatation verified....");
-            } else {
-                LOGGER.info("Port updatation failed....");
+                portUUID = UUID.fromString(portUUID).toString();
+                if (deviceUUID != null) {
+                    if (!(deviceUUID.contains("-"))) {
+                        deviceUUID = Utils.uuidFormater(deviceUUID);
+                    }
+                    deviceUUID = UUID.fromString(deviceUUID).toString();
+                }
+                VirtualMachineInterface virtualMachineInterface = (VirtualMachineInterface) apiConnector.findById(VirtualMachineInterface.class,
+                        portUUID);
+                if (deviceUUID == null || ("").equals(deviceUUID)) {
+                    if (updatedPort.getName().matches(virtualMachineInterface.getDisplayName())
+                            && virtualMachineInterface.getVirtualMachine() == null) {
+                        LOGGER.info("Port updation verified....");
+                    }
+                } else {
+                    if (updatedPort.getName().matches(virtualMachineInterface.getDisplayName())
+                            && deviceUUID.matches(virtualMachineInterface.getVirtualMachine().get(0).getUuid())) {
+                        LOGGER.info("Port updatation verified....");
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.error("Exception :" + e);
             }
-        } catch (Exception e) {
-            LOGGER.error("Exception :" + e);
+        } catch (IOException ioEx) {
+            LOGGER.error("Exception :" + ioEx);
+        } catch (Exception ex) {
+            LOGGER.error("Exception :" + ex);
         }
-    }
-
-    /**
-     * Invoked to format the UUID if UUID is not in correct format.
-     *
-     * @param String
-     *            An instance of UUID string.
-     *
-     * @return Correctly formated UUID string.
-     */
-    private String uuidFormater(String uuid) {
-        String uuidPattern = null;
-        try {
-            String id1 = uuid.substring(0, 8);
-            String id2 = uuid.substring(8, 12);
-            String id3 = uuid.substring(12, 16);
-            String id4 = uuid.substring(16, 20);
-            String id5 = uuid.substring(20, 32);
-            uuidPattern = (id1 + "-" + id2 + "-" + id3 + "-" + id4 + "-" + id5);
-
-        } catch (Exception e) {
-            LOGGER.error("UUID is not in correct format ");
-            LOGGER.error("Exception :" + e);
-        }
-        return uuidPattern;
     }
 }

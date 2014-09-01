@@ -1,33 +1,39 @@
+/*
+ * Copyright (C) 2014 Juniper Networks, Inc.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v1.0 which accompanies this distribution,
+ * and is available at http://www.eclipse.org/legal/epl-v10.html
+ *
+ */
 package org.opendaylight.plugin2oc.neutron;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.powermock.api.easymock.PowerMock.expectNew;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.util.ArrayList;
+import java.util.List;
 
 import net.juniper.contrail.api.ApiConnector;
+import net.juniper.contrail.api.ApiPropertyBase;
+import net.juniper.contrail.api.ObjectReference;
 import net.juniper.contrail.api.types.LogicalRouter;
 import net.juniper.contrail.api.types.Project;
-import net.juniper.contrail.api.types.VirtualMachine;
 import net.juniper.contrail.api.types.VirtualMachineInterface;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.opendaylight.controller.networkconfig.neutron.NeutronRouter;
 import org.opendaylight.controller.networkconfig.neutron.NeutronRouter_Interface;
 import org.opendaylight.controller.networkconfig.neutron.NeutronRouter_NetworkReference;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
-
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({ RouterHandler.class, LogicalRouter.class })
+/**
+ * Test Class for Neutron Router.
+ */
 public class RouterHandlerTest {
 
     RouterHandler routerHandler;
@@ -111,15 +117,6 @@ public class RouterHandlerTest {
         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, routerHandler.canCreateRouter(mockedNeutronRouter));
     }
 
-    /* Test method to check if neutron router name is null */
-    @Test
-    public void testCanCreateRouterNullName() {
-        Activator.apiConnector = mockedApiConnector;
-        NeutronRouter neutronRouter = defaultNeutronObject();
-        neutronRouter.setName(null);
-        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, routerHandler.canCreateRouter(neutronRouter));
-    }
-
     /* Test method to check if tenant ID is null */
     @Test
     public void testCanCreateRouterNullTenantID() {
@@ -129,57 +126,53 @@ public class RouterHandlerTest {
         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, routerHandler.canCreateRouter(neutronRouter));
     }
 
-    /* Test method to check if router Project UUID not found */
+    /* Test method to check if neutron router name is null */
     @Test
-    public void testCanCreateRouterProjectUUIDnull() throws IOException {
+    public void testCanCreateRouterNullName() {
         Activator.apiConnector = mockedApiConnector;
         NeutronRouter neutronRouter = defaultNeutronObject();
-        when(mockedApiConnector.findById(Project.class, neutronRouter.getTenantID())).thenReturn(null);
-        assertEquals(HttpURLConnection.HTTP_NOT_FOUND, routerHandler.canCreateRouter(neutronRouter));
+        neutronRouter.setName(null);
+        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, routerHandler.canCreateRouter(neutronRouter));
     }
 
-    /* Test method to check if router creation fails */
+    /*
+     * Test method to check neutron network create with same name
+     */
     @Test
-    public void testCanCreateRouterFails() throws Exception {
+    public void testcanCreateRouterByNameExist() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronRouter neutronRouter = defaultNeutronObject();
-        LogicalRouter lr = PowerMock.createNiceMock(LogicalRouter.class);
-        expectNew(LogicalRouter.class).andReturn(lr);
         when(mockedApiConnector.findById(Project.class, neutronRouter.getTenantID())).thenReturn(mockedProject);
-        lr.setParent(mockedProject);
-        when(mockedApiConnector.create(lr)).thenReturn(false);
-        PowerMock.replay(lr, LogicalRouter.class);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, routerHandler.canCreateRouter(neutronRouter));
+        when(mockedApiConnector.findByName(LogicalRouter.class, mockedProject, neutronRouter.getName())).thenReturn("Router-01");
+        assertEquals(HttpURLConnection.HTTP_FORBIDDEN, routerHandler.canCreateRouter(neutronRouter));
     }
 
-    /* Test method to check if router created */
+    /*
+     * Test method to check neutron network create return status 200 Ok
+     */
     @Test
-    public void testCanCreateRouterOK() throws Exception {
+    public void testcanCreateRouterOK() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronRouter neutronRouter = defaultNeutronObject();
-        LogicalRouter lr = PowerMock.createNiceMock(LogicalRouter.class);
-        expectNew(LogicalRouter.class).andReturn(lr);
         when(mockedApiConnector.findById(Project.class, neutronRouter.getTenantID())).thenReturn(mockedProject);
-        lr.setParent(mockedProject);
-        when(mockedApiConnector.create(lr)).thenReturn(true);
-        PowerMock.replay(lr, LogicalRouter.class);
+        when(mockedApiConnector.findByName(LogicalRouter.class, mockedProject, neutronRouter.getName())).thenReturn(null);
         assertEquals(HttpURLConnection.HTTP_OK, routerHandler.canCreateRouter(neutronRouter));
     }
 
-    /* Test method to check if neutron router is null for delete */
+    /* Test method to check if neutron router object is null for delete */
     @Test
     public void testcanDeleteRouterNull() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, routerHandler.canDeleteRouter(null));
     }
 
-    /* Test method to check if delete router that does not exist */
+    /* Test method to check if delete router with status 200 ok */
     @Test
-    public void testcanDeleteRouterBadRequest() throws IOException {
+    public void testcanDeleteRouterOK() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronRouter neutronRouter = defaultNeutronObject();
-        when(mockedApiConnector.findById(LogicalRouter.class, neutronRouter.getRouterUUID())).thenReturn(null);
-        assertEquals(HttpURLConnection.HTTP_BAD_REQUEST, routerHandler.canDeleteRouter(neutronRouter));
+        when(mockedApiConnector.findById(LogicalRouter.class, neutronRouter.getRouterUUID())).thenReturn(mockedLogicalRouter);
+        assertEquals(HttpURLConnection.HTTP_OK, routerHandler.canDeleteRouter(neutronRouter));
     }
 
     /* Test method to check if can update router Null object */
@@ -199,46 +192,14 @@ public class RouterHandlerTest {
         assertEquals(HttpURLConnection.HTTP_NOT_FOUND, routerHandler.canUpdateRouter(neutronRouter, deltaRouter));
     }
 
-    /* Test method to check if can update router object not found */
-    @Test
-    public void testcanUpdateRouterFailed() throws IOException {
-        Activator.apiConnector = mockedApiConnector;
-        NeutronRouter neutronRouter = defaultNeutronObject();
-        NeutronRouter deltaRouter = deltaNeutronObject();
-        when(mockedApiConnector.findById(LogicalRouter.class, neutronRouter.getRouterUUID())).thenReturn(mockedLogicalRouter);
-        when(mockedApiConnector.update(mockedLogicalRouter)).thenReturn(false);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, routerHandler.canUpdateRouter(neutronRouter, deltaRouter));
-    }
-
-    /* Test method to check if can update router object not founf=d */
+    /* Test method to check if can update router returns status 200 ok */
     @Test
     public void testcanUpdateRouterOK() throws IOException {
         Activator.apiConnector = mockedApiConnector;
         NeutronRouter neutronRouter = defaultNeutronObject();
         NeutronRouter deltaRouter = deltaNeutronObject();
         when(mockedApiConnector.findById(LogicalRouter.class, neutronRouter.getRouterUUID())).thenReturn(mockedLogicalRouter);
-        when(mockedApiConnector.update(mockedLogicalRouter)).thenReturn(true);
         assertEquals(HttpURLConnection.HTTP_OK, routerHandler.canUpdateRouter(neutronRouter, deltaRouter));
-    }
-
-    /* Test method to check if canAttachInterface update vmi failed */
-    @Test
-    public void testcanAttachInterfaceVMIfailed() throws Exception {
-        Activator.apiConnector = mockedApiConnector;
-        NeutronRouter neutronRouter = defaultNeutronObject();
-        NeutronRouter_Interface neutronRouterInterface = deltaNeutronRouter_Interface();
-        when(mockedApiConnector.findById(LogicalRouter.class, neutronRouter.getRouterUUID())).thenReturn(mockedLogicalRouter);
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronRouterInterface.getPortUUID()))
-                .thenReturn(mockVirtualMachineInterface);
-        mockedLogicalRouter.setVirtualMachineInterface(mockVirtualMachineInterface);
-        VirtualMachine vm = PowerMock.createNiceMock(VirtualMachine.class);
-        expectNew(VirtualMachine.class).andReturn(vm);
-        vm.setName(neutronRouter.getRouterUUID());
-        vm.setUuid(neutronRouter.getRouterUUID());
-        mockVirtualMachineInterface.setVirtualMachine(vm);
-        when(mockedApiConnector.update(mockVirtualMachineInterface)).thenReturn(false);
-        PowerMock.replay(vm, VirtualMachine.class);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, routerHandler.canAttachInterface(neutronRouter, neutronRouterInterface));
     }
 
     /*
@@ -246,60 +207,24 @@ public class RouterHandlerTest {
      * attach interface failed
      */
     @Test
-    public void testcanAttachInterfaceVMIOk() throws Exception {
+    public void testcanAttachInterfaceOk() throws Exception {
         Activator.apiConnector = mockedApiConnector;
         NeutronRouter neutronRouter = defaultNeutronObject();
         NeutronRouter_Interface neutronRouterInterface = deltaNeutronRouter_Interface();
-        when(mockedApiConnector.findById(LogicalRouter.class, neutronRouter.getRouterUUID())).thenReturn(mockedLogicalRouter);
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronRouterInterface.getPortUUID()))
-                .thenReturn(mockVirtualMachineInterface);
-        mockedLogicalRouter.setVirtualMachineInterface(mockVirtualMachineInterface);
-        VirtualMachine vm = PowerMock.createNiceMock(VirtualMachine.class);
-        expectNew(VirtualMachine.class).andReturn(vm);
-        vm.setName(neutronRouter.getRouterUUID());
-        vm.setUuid(neutronRouter.getRouterUUID());
-        mockVirtualMachineInterface.setVirtualMachine(vm);
-        when(mockedApiConnector.update(mockVirtualMachineInterface)).thenReturn(true);
-        PowerMock.replay(vm, VirtualMachine.class);
-        when(mockedApiConnector.update(mockedLogicalRouter)).thenReturn(false);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, routerHandler.canAttachInterface(neutronRouter, neutronRouterInterface));
-    }
-
-    /* Test method to check if interface is attached successfully */
-    @Test
-    public void testcanAttachInterfaceOK() throws Exception {
-        Activator.apiConnector = mockedApiConnector;
-        NeutronRouter neutronRouter = defaultNeutronObject();
-        NeutronRouter_Interface neutronRouterInterface = deltaNeutronRouter_Interface();
-        when(mockedApiConnector.findById(LogicalRouter.class, neutronRouter.getRouterUUID())).thenReturn(mockedLogicalRouter);
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronRouterInterface.getPortUUID()))
-                .thenReturn(mockVirtualMachineInterface);
-        mockedLogicalRouter.setVirtualMachineInterface(mockVirtualMachineInterface);
-        VirtualMachine vm = PowerMock.createNiceMock(VirtualMachine.class);
-        expectNew(VirtualMachine.class).andReturn(vm);
-        vm.setName(neutronRouter.getRouterUUID());
-        vm.setUuid(neutronRouter.getRouterUUID());
-        mockVirtualMachineInterface.setVirtualMachine(vm);
-        when(mockedApiConnector.update(mockVirtualMachineInterface)).thenReturn(true);
-        PowerMock.replay(vm, VirtualMachine.class);
-        when(mockedApiConnector.update(mockedLogicalRouter)).thenReturn(true);
         assertEquals(HttpURLConnection.HTTP_OK, routerHandler.canAttachInterface(neutronRouter, neutronRouterInterface));
     }
 
-    /* Test method to check if canDetachInterface update vmi failed */
+    /* Test method to check if canDetachInterface when no such Router exist */
     @Test
-    public void testcanDetachInterfaceVMIfailed() throws Exception {
+    public void testcanDetachInterfaceRouterNotFound() throws Exception {
         Activator.apiConnector = mockedApiConnector;
         NeutronRouter neutronRouter = defaultNeutronObject();
         NeutronRouter_Interface neutronRouterInterface = deltaNeutronRouter_Interface();
-        when(mockedApiConnector.findById(LogicalRouter.class, neutronRouter.getRouterUUID())).thenReturn(mockedLogicalRouter);
-        when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronRouterInterface.getPortUUID()))
-                .thenReturn(mockVirtualMachineInterface);
-        when(mockedApiConnector.update(mockVirtualMachineInterface)).thenReturn(false);
-        assertEquals(HttpURLConnection.HTTP_INTERNAL_ERROR, routerHandler.canDetachInterface(neutronRouter, neutronRouterInterface));
+        when(mockedApiConnector.findById(LogicalRouter.class, neutronRouter.getRouterUUID())).thenReturn(null);
+        assertEquals(HttpURLConnection.HTTP_NOT_FOUND, routerHandler.canDetachInterface(neutronRouter, neutronRouterInterface));
     }
 
-    /* Test method to check if interface is detached succesfully */
+    /* Test method to check if canDetachInterface return status 200 OK */
     @Test
     public void testcanDetachInterfaceOK() throws Exception {
         Activator.apiConnector = mockedApiConnector;
@@ -308,8 +233,36 @@ public class RouterHandlerTest {
         when(mockedApiConnector.findById(LogicalRouter.class, neutronRouter.getRouterUUID())).thenReturn(mockedLogicalRouter);
         when(mockedApiConnector.findById(VirtualMachineInterface.class, neutronRouterInterface.getPortUUID()))
                 .thenReturn(mockVirtualMachineInterface);
-        when(mockedApiConnector.update(mockVirtualMachineInterface)).thenReturn(true);
-        when(mockedApiConnector.update(mockedLogicalRouter)).thenReturn(true);
         assertEquals(HttpURLConnection.HTTP_OK, routerHandler.canDetachInterface(neutronRouter, neutronRouterInterface));
     }
+
+    /* Test method to check if interface is attached with port ID*/
+    @Test
+    public void testcanDetachInterfacePortExist() throws Exception {
+            Activator.apiConnector = mockedApiConnector;
+            NeutronRouter neutronRouter = defaultNeutronObject();
+            NeutronRouter_Interface neutronRouterInterface = deltaNeutronRouter_Interface();
+            when(mockedApiConnector.findById(LogicalRouter.class,neutronRouter.getRouterUUID())).thenReturn(mockedLogicalRouter);
+            when(mockedApiConnector.findById(VirtualMachineInterface.class,neutronRouterInterface.getPortUUID())).thenReturn(mockVirtualMachineInterface);
+            List<ObjectReference<ApiPropertyBase>> vmiList = new ArrayList<ObjectReference<ApiPropertyBase>>();
+            vmiList.add(new ObjectReference<ApiPropertyBase>(mockVirtualMachineInterface.getQualifiedName(), null));
+            vmiList.get(0).setReference(mockVirtualMachineInterface.getQualifiedName(), null, "", "119570f2-17b1-4fc3-99ec-1b7f7778a29a");
+            when(mockedLogicalRouter.getVirtualMachineInterface()).thenReturn(vmiList);
+            assertEquals(HttpURLConnection.HTTP_OK,routerHandler.canDetachInterface(neutronRouter,neutronRouterInterface));
+    }
+
+    /* Test method to check if No interface is attached with port ID */
+     @Test
+     public void testcanDetachInterfacePortDoesNotExist() throws Exception {
+         Activator.apiConnector = mockedApiConnector;
+         NeutronRouter neutronRouter = defaultNeutronObject();
+         NeutronRouter_Interface neutronRouterInterface = deltaNeutronRouter_Interface();
+         when(mockedApiConnector.findById(LogicalRouter.class,neutronRouter.getRouterUUID())).thenReturn(mockedLogicalRouter);
+         when(mockedApiConnector.findById(VirtualMachineInterface.class,neutronRouterInterface.getPortUUID())).thenReturn(mockVirtualMachineInterface);
+         List<ObjectReference<ApiPropertyBase>> vmiList = new ArrayList<ObjectReference<ApiPropertyBase>>();
+         vmiList.add(new ObjectReference<ApiPropertyBase>(mockVirtualMachineInterface.getQualifiedName(), null));
+         vmiList.get(0).setReference(mockVirtualMachineInterface.getQualifiedName(), null, "", "ff9570f2-17b1-4fc3-99ec-1b7f7778a29a");
+         when(mockedLogicalRouter.getVirtualMachineInterface()).thenReturn(vmiList);
+         assertEquals(HttpURLConnection.HTTP_BAD_REQUEST,routerHandler.canDetachInterface(neutronRouter,neutronRouterInterface));
+     }
 }
