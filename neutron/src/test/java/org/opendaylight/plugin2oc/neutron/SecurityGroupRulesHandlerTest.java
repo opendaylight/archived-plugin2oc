@@ -18,7 +18,6 @@ import java.net.HttpURLConnection;
 
 import net.juniper.contrail.api.ApiConnector;
 import net.juniper.contrail.api.types.SecurityGroup;
-import net.juniper.contrail.api.types.SubnetType;
 
 import org.junit.After;
 import org.junit.Before;

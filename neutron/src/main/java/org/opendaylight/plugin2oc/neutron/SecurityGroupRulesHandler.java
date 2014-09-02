@@ -75,7 +75,6 @@ public class SecurityGroupRulesHandler implements INeutronSecurityRuleAware {
             }
             secGroupRulesUUID = UUID.fromString(secGroupRulesUUID).toString();
         }
-        
         if (securityRule.getSecurityRuleDirection() == null || securityRule.getSecurityRuleDirection().equals("")) {
             LOGGER.error("SecurityGroup Rule direction can't be null/empty...");
             return HttpURLConnection.HTTP_BAD_REQUEST;
@@ -84,7 +83,6 @@ public class SecurityGroupRulesHandler implements INeutronSecurityRuleAware {
             LOGGER.error("SecurityGroup Rule direction invalid : Valid values are ingress/egress");
             return HttpURLConnection.HTTP_BAD_REQUEST;
         }
-        System.out.println("---------->"+securityRule.getSecurityRemoteGroupID()+"---------->"+securityRule.getSecurityRuleDirection()+"---------->"+securityRule.getSecurityRulePortMax()+"---------->"+securityRule.getSecurityRulePortMin());
         if (securityRule.getSecurityRulePortMin() == null || securityRule.getSecurityRulePortMax() == null) {
             LOGGER.error("SecurityGroup port min/max range can't be null/empty...");
             return HttpURLConnection.HTTP_BAD_REQUEST;
@@ -150,9 +148,7 @@ public class SecurityGroupRulesHandler implements INeutronSecurityRuleAware {
         if (securityRule.getSecurityRemoteGroupID() == null && securityRule.getSecurityRuleRemoteIpPrefix() == null) {
             LOGGER.error("Both SecurityGroup  remote ID and remote IP prefix can nor be null");
             return HttpURLConnection.HTTP_BAD_REQUEST;
-            
-            
-        }
+            }
         if(securityRule.getSecurityRuleRemoteIpPrefix() == null && securityRule.getSecurityRemoteGroupID() != null  )
         {
             virtualSecurityGroup = null;
@@ -166,8 +162,6 @@ public class SecurityGroupRulesHandler implements INeutronSecurityRuleAware {
                 return HttpURLConnection.HTTP_BAD_REQUEST;
             }
             secGroupRuleUUID = UUID.fromString(secGroupRuleUUID).toString();
-            
-            
             try {
                 virtualSecurityGroup = (SecurityGroup) apiConnector.findById(SecurityGroup.class, secGroupRuleUUID);
             } catch (IOException e) {
@@ -178,10 +172,7 @@ public class SecurityGroupRulesHandler implements INeutronSecurityRuleAware {
                 LOGGER.warn("SecurityRemoteGroup does not exists for the specified security group ID");
                 return HttpURLConnection.HTTP_FORBIDDEN;
             }
-            
-            
-        }
-      
+            }
         LOGGER.info("SecurityGroupRules object " + securityRule);
         return HttpURLConnection.HTTP_OK;
     }
@@ -296,14 +287,11 @@ public class SecurityGroupRulesHandler implements INeutronSecurityRuleAware {
             secGroupRuleUUID = Utils.uuidFormater(securityRule.getSecurityRuleGroupID());
         }
         secGroupRuleUUID = UUID.fromString(secGroupRuleUUID).toString();
-        
         String secRuleUUID = securityRule.getSecurityRuleUUID();
         if (!(securityRule.getSecurityRuleUUID().contains("-"))) {
             secRuleUUID = Utils.uuidFormater(securityRule.getSecurityRuleUUID());
         }
         secRuleUUID = UUID.fromString(secRuleUUID).toString();
-        
-        
         try {
             virtualSecurityGroup = (SecurityGroup) apiConnector.findById(SecurityGroup.class, secGroupRuleUUID);
         } catch (IOException e) {
@@ -313,7 +301,7 @@ public class SecurityGroupRulesHandler implements INeutronSecurityRuleAware {
         if (virtualSecurityGroup == null) {
             LOGGER.warn("SecurityGroup does not exists for the specified security group ID");
             return HttpURLConnection.HTTP_FORBIDDEN;
-        }
+            }
         boolean flag = false;
         if (virtualSecurityGroup.getEntries() != null) {
             if (virtualSecurityGroup.getEntries().getPolicyRule().isEmpty() == false) {
@@ -361,7 +349,6 @@ public class SecurityGroupRulesHandler implements INeutronSecurityRuleAware {
             secRuleUUID = Utils.uuidFormater(securityRule.getSecurityRuleUUID());
         }
         secRuleUUID = UUID.fromString(secRuleUUID).toString();
-        
         if (virtualSecurityGroup.getEntries() != null) {
             if (virtualSecurityGroup.getEntries().getPolicyRule().isEmpty() == false) {
                 ListIterator<PolicyRuleType> i = virtualSecurityGroup.getEntries().getPolicyRule().listIterator();
@@ -460,7 +447,6 @@ public class SecurityGroupRulesHandler implements INeutronSecurityRuleAware {
                 } catch (IOException e) {
                     LOGGER.error("Exception :     " + e);
                 }
-               
                 Iterator<String> i = virtualSecurityGroup.getQualifiedName().iterator();
                 while (i.hasNext()) {
                     if (securityGroupQualifiedName == null) {
