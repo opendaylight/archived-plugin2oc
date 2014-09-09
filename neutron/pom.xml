@@ -13,12 +13,12 @@
     <packaging>bundle</packaging>
     <repositories>
         <repository>
-            <id>juniper-contrail</id>
-            <url>https://github.com/Juniper/contrail-maven/raw/master/releases</url>
-        </repository>
-        <repository>
             <id>opendaylight-release</id>
             <url>http://nexus.opendaylight.org/content/repositories/opendaylight.release</url>
+        </repository>
+        <repository>
+            <id>juniper-contrail</id>
+            <url>https://github.com/Juniper/contrail-maven/raw/master/releases</url>
         </repository>
     </repositories>
     <properties>
@@ -39,7 +39,7 @@
                 <configuration>
                     <instructions>
                     <Import-Package>
-                            org.opendaylight.controller.networkconfig.neutron,
+                            org.opendaylight.controller.networkconfig.neutron.*,
                             org.opendaylight.controller.sal.binding.api,
                             org.apache.felix.dm,
                             org.slf4j,
@@ -68,7 +68,7 @@
         </dependency>
         <dependency>
             <groupId>org.opendaylight.controller</groupId>
-            <version>0.4.1</version>
+            <version>0.4.2-SNAPSHOT</version>
             <artifactId>networkconfig.neutron</artifactId>
         </dependency>
         <dependency>
@@ -110,12 +110,12 @@
         <dependency>
             <groupId>org.opendaylight.controller</groupId>
             <artifactId>sal</artifactId>
-            <version>0.7.0</version>
+            <version>0.8.1-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.opendaylight.controller</groupId>
             <artifactId>sal-binding-api</artifactId>
-            <version>1.0</version>
+            <version>1.1-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>

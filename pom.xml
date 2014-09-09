@@ -4,7 +4,6 @@
   <prerequisites>
     <maven>3.0</maven>
   </prerequisites>
-
   <parent>
     <groupId>org.opendaylight.plugin2oc</groupId>
     <artifactId>commons.plugin2oc</artifactId>
@@ -21,5 +20,7 @@
   <modules>
     <module>neutron</module>
     <module>commons/parent</module>
+    <module>features-plugin2oc</module>
+    <module>distribution-karaf</module>
   </modules>
 </project>
