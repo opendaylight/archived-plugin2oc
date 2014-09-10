@@ -59,6 +59,17 @@
       <name>opendaylight-snapshot</name>
       <url>http://nexus.opendaylight.org/content/repositories/opendaylight.snapshot/</url>
     </repository>
+    <!-- Contrail Released artifact -->
+    <repository>
+      <id>contrail-release</id>
+      <url>https://github.com/Juniper/contrail-maven/raw/master/releases/</url>
+      <snapshots>
+         <enabled>false</enabled>
+      </snapshots>
+      <releases>
+         <enabled>true</enabled>
+      </releases>
+    </repository>
   </repositories>
 
   <pluginRepositories>
@@ -79,6 +90,11 @@
       <id>opendaylight-snapshot</id>
       <name>central2</name>
       <url>http://nexus.opendaylight.org/content/repositories/opendaylight.snapshot/</url>
+    </pluginRepository>
+    <pluginRepository>
+      <id>contrail-release</id>
+      <name>third-party</name>
+      <url>https://github.com/Juniper/contrail-maven/raw/master/releases/</url>
     </pluginRepository>
   </pluginRepositories>
 </project>
