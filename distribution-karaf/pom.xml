@@ -66,6 +66,22 @@
         <type>xml</type>
         <scope>runtime</scope>
       </dependency>
+    <dependency>
+        <groupId>org.opendaylight.yangtools</groupId>
+        <artifactId>features-yangtools</artifactId>
+        <version>0.6.2-SNAPSHOT</version>
+        <classifier>features</classifier>
+        <type>xml</type>
+        <scope>runtime</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.opendaylight.controller</groupId>
+        <artifactId>features-mdsal</artifactId>
+        <version>1.1-SNAPSHOT</version>
+        <classifier>features</classifier>
+        <type>xml</type>
+        <scope>runtime</scope>
+       </dependency>
     <!-- ODL Branding -->
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
