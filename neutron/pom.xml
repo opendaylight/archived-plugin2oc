@@ -50,7 +50,7 @@
                         <Bundle-Activator>
                             org.opendaylight.plugin2oc.neutron.Activator
                         </Bundle-Activator>
-                        <Embed-Dependency>httpclient,httpcore;type=!pom;inline=false</Embed-Dependency>
+                        <Embed-Dependency>httpclient,httpcore,commons-lang,commons-exec;type=!pom;inline=false</Embed-Dependency>
                         <Export-Package>
                             net.juniper.contrail.api.*;version="1.2"
                         </Export-Package>
@@ -162,3 +162,4 @@
         </dependency>
     </dependencies>
 </project>
+

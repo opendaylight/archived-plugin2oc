@@ -35,6 +35,30 @@
       <scope>runtime</scope>
     </dependency>
     <dependency>
+        <groupId>org.opendaylight.controller</groupId>
+        <artifactId>features-adsal</artifactId>
+        <version>0.8.1-SNAPSHOT</version>
+        <classifier>features</classifier>
+        <type>xml</type>
+        <scope>runtime</scope>
+      </dependency>
+    <dependency>
+        <groupId>org.opendaylight.controller</groupId>
+        <artifactId>base-features</artifactId>
+        <version>1.4.2-SNAPSHOT</version>
+        <classifier>features</classifier>
+        <type>xml</type>
+        <scope>runtime</scope>
+      </dependency>
+    <dependency>
+        <groupId>org.opendaylight.controller</groupId>
+        <artifactId>features-nsf</artifactId>
+        <version>0.4.2-SNAPSHOT</version>
+        <classifier>features</classifier>
+        <type>xml</type>
+        <scope>runtime</scope>
+      </dependency>
+    <dependency>
         <groupId>org.opendaylight.plugin2oc</groupId>
         <artifactId>features-plugin2oc</artifactId>
         <version>0.1</version>
@@ -42,7 +66,6 @@
         <type>xml</type>
         <scope>runtime</scope>
       </dependency>
-
     <!-- ODL Branding -->
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
@@ -247,3 +270,4 @@
     <url>https://git.opendaylight.org/gerrit/gitweb?p=plugin2oc.git;a=summary</url>
   </scm>
 </project>
+

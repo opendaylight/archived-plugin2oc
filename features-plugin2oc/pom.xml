@@ -27,6 +27,27 @@
 
    <dependencies>
         <dependency>
+          <groupId>org.opendaylight.controller</groupId>
+          <artifactId>features-nsf</artifactId>
+          <version>0.4.2-SNAPSHOT</version>
+          <classifier>features</classifier>
+          <type>xml</type>
+        </dependency>
+        <dependency>
+          <groupId>org.opendaylight.controller</groupId>
+          <artifactId>features-adsal</artifactId>
+          <version>0.8.1-SNAPSHOT</version>
+          <classifier>features</classifier>
+          <type>xml</type>
+        </dependency>
+        <dependency>
+          <groupId>org.opendaylight.controller</groupId>
+          <artifactId>base-features</artifactId>
+          <version>1.4.2-SNAPSHOT</version>
+          <classifier>features</classifier>
+          <type>xml</type>
+        </dependency>
+        <dependency>
             <groupId>org.opendaylight.controller</groupId>
             <artifactId>sal</artifactId>
             <version>0.8.1-SNAPSHOT</version>
@@ -115,3 +136,4 @@
       <url>https://git.opendaylight.org/gerrit/gitweb?p=plugin2oc.git;a=summary</url>
    </scm>
 </project>
+
