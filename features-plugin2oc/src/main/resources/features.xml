@@ -23,6 +23,6 @@
         <bundle>mvn:org.opendaylight.controller/networkconfig.neutron/0.4.2-SNAPSHOT</bundle>
         <bundle>mvn:org.opendaylight.controller/sal/0.8.1-SNAPSHOT</bundle>
         <bundle>mvn:org.opendaylight.controller/sal-binding-api/1.1-SNAPSHOT</bundle>
-        <bundle>mvn:org.opendaylight.plugin2oc/plugin2oc.neutron/0.1</bundle>
+        <bundle>mvn:org.opendaylight.plugin2oc/plugin2oc.neutron/0.1-SNAPSHOT</bundle>
     </feature>
 </features>

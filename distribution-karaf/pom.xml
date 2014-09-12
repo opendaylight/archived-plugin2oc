@@ -4,7 +4,7 @@
   <parent>
     <artifactId>commons.plugin2oc</artifactId>
     <groupId>org.opendaylight.plugin2oc</groupId>
-    <version>0.1</version>
+    <version>0.1-SNAPSHOT</version>
     <relativePath>../commons/parent</relativePath>
 </parent>
   <artifactId>distribution-karaf</artifactId>
@@ -61,7 +61,7 @@
     <dependency>
         <groupId>org.opendaylight.plugin2oc</groupId>
         <artifactId>features-plugin2oc</artifactId>
-        <version>0.1</version>
+        <version>0.1-SNAPSHOT</version>
         <classifier>features</classifier>
         <type>xml</type>
         <scope>runtime</scope>

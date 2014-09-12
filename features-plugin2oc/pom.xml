@@ -9,7 +9,7 @@
    <parent>
     <artifactId>plugin2oc.project</artifactId>
     <groupId>org.opendaylight.plugin2oc</groupId>
-    <version>0.1</version>
+    <version>0.1-SNAPSHOT</version>
   </parent>
    <artifactId>features-plugin2oc</artifactId>
    <groupId>org.opendaylight.plugin2oc</groupId>
@@ -78,7 +78,7 @@
         </dependency>
         <dependency>
             <groupId>org.opendaylight.plugin2oc</groupId>
-            <version>0.1</version>
+            <version>0.1-SNAPSHOT</version>
             <artifactId>plugin2oc.neutron</artifactId>
         </dependency>
     <!-- test the features.xml -->
