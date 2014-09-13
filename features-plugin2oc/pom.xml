@@ -49,7 +49,7 @@
         </dependency>
         <dependency>
           <groupId>org.opendaylight.controller</groupId>
-          <artifactId>base-features</artifactId>
+          <artifactId>features-base</artifactId>
           <version>1.4.2-SNAPSHOT</version>
           <classifier>features</classifier>
           <type>xml</type>

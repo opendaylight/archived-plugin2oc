@@ -11,7 +11,7 @@
     <repository>mvn:org.opendaylight.yangtools/features-yangtools/0.6.2-SNAPSHOT/xml/features</repository>
     <repository>mvn:org.opendaylight.controller/features-nsf/0.4.2-SNAPSHOT/xml/features</repository>
     <repository>mvn:org.opendaylight.controller/features-adsal/0.8.1-SNAPSHOT/xml/features</repository>
-    <repository>mvn:org.opendaylight.controller/base-features/1.4.2-SNAPSHOT/xml/features</repository>
+    <repository>mvn:org.opendaylight.controller/features-base/1.4.2-SNAPSHOT/xml/features</repository>
     <repository>mvn:org.opendaylight.controller/features-mdsal/1.1-SNAPSHOT/xml/features</repository>
     <feature name='odl-plugin2oc' description="OpenDaylight :: plugin2oc :: Plugin" version='${project.version}'>
         <feature>odl-nsf-all</feature>
