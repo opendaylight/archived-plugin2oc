@@ -1,0 +1,5 @@
+[gerrit]
+host=git.opendaylight.org
+port=29418
+project=plugin2oc.git
+defaultbranch=stable/helium
