@@ -8,11 +8,11 @@
 <features name="odl-plugin2oc-${project.version}" xmlns="http://karaf.apache.org/xmlns/features/v1.2.0"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://karaf.apache.org/xmlns/features/v1.2.0 http://karaf.apache.org/xmlns/features/v1.2.0">
-    <repository>mvn:org.opendaylight.yangtools/features-yangtools/0.6.2-SNAPSHOT/xml/features</repository>
-    <repository>mvn:org.opendaylight.controller/features-nsf/0.4.2-SNAPSHOT/xml/features</repository>
-    <repository>mvn:org.opendaylight.controller/features-adsal/0.8.1-SNAPSHOT/xml/features</repository>
-    <repository>mvn:org.opendaylight.controller/features-base/1.4.2-SNAPSHOT/xml/features</repository>
-    <repository>mvn:org.opendaylight.controller/features-mdsal/1.1-SNAPSHOT/xml/features</repository>
+    <repository>mvn:org.opendaylight.yangtools/features-yangtools/0.6.2-Helium/xml/features</repository>
+    <repository>mvn:org.opendaylight.controller/features-nsf/0.4.2-Helium/xml/features</repository>
+    <repository>mvn:org.opendaylight.controller/features-adsal/0.8.1-Helium/xml/features</repository>
+    <repository>mvn:org.opendaylight.controller/features-base/1.4.2-Helium/xml/features</repository>
+    <repository>mvn:org.opendaylight.controller/features-mdsal/1.1-Helium/xml/features</repository>
     <feature name='odl-plugin2oc' description="OpenDaylight :: plugin2oc :: Plugin" version='${project.version}'>
         <feature>odl-nsf-all</feature>
         <feature>odl-adsal-all</feature>
@@ -20,9 +20,9 @@
         <feature>odl-mdsal-broker</feature>
         <feature>odl-yangtools-models</feature>
         <feature>odl-yangtools-binding</feature>
-        <bundle>mvn:org.opendaylight.controller/networkconfig.neutron/0.4.2-SNAPSHOT</bundle>
-        <bundle>mvn:org.opendaylight.controller/sal/0.8.1-SNAPSHOT</bundle>
-        <bundle>mvn:org.opendaylight.controller/sal-binding-api/1.1-SNAPSHOT</bundle>
-        <bundle>mvn:org.opendaylight.plugin2oc/plugin2oc.neutron/0.1-SNAPSHOT</bundle>
+        <bundle>mvn:org.opendaylight.controller/networkconfig.neutron/0.4.2-Helium</bundle>
+        <bundle>mvn:org.opendaylight.controller/sal/0.8.1-Helium</bundle>
+        <bundle>mvn:org.opendaylight.controller/sal-binding-api/1.1-Helium</bundle>
+        <bundle>mvn:org.opendaylight.plugin2oc/plugin2oc.neutron/0.1-Helium</bundle>
     </feature>
 </features>
