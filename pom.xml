@@ -7,12 +7,12 @@
   <parent>
     <groupId>org.opendaylight.plugin2oc</groupId>
     <artifactId>commons.plugin2oc</artifactId>
-    <version>0.1-Helium</version>
+    <version>0.1.1-SNAPSHOT</version>
     <relativePath>commons/parent</relativePath>
   </parent>
   <groupId>org.opendaylight.plugin2oc</groupId>
   <artifactId>plugin2oc.project</artifactId>
-  <version>0.1-Helium</version>
+  <version>0.1.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <properties>
   <sonar.host.url> http://localhost:9000/ </sonar.host.url>

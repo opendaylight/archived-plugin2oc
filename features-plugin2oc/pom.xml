@@ -9,83 +9,83 @@
    <parent>
     <artifactId>plugin2oc.project</artifactId>
     <groupId>org.opendaylight.plugin2oc</groupId>
-    <version>0.1-Helium</version>
+    <version>0.1.1-SNAPSHOT</version>
   </parent>
    <artifactId>features-plugin2oc</artifactId>
    <groupId>org.opendaylight.plugin2oc</groupId>
    <packaging>jar</packaging>
    <properties>
       <features.file>features.xml</features.file>
-      <branding.version>1.0.0-Helium</branding.version>
-      <karaf.resources.version>1.4.2-Helium</karaf.resources.version>
+      <branding.version>1.0.1-SNAPSHOT</branding.version>
+      <karaf.resources.version>1.4.3-SNAPSHOT</karaf.resources.version>
       <karaf.version>3.0.1</karaf.version>
-      <feature.test.version>0.6.2-Helium</feature.test.version>
-      <karaf.empty.version>1.4.2-Helium</karaf.empty.version>
+      <feature.test.version>0.6.3-SNAPSHOT</feature.test.version>
+      <karaf.empty.version>1.4.3-SNAPSHOT</karaf.empty.version>
       <surefire.version>2.17</surefire.version>
-      <yangtools.version>0.6.2-Helium</yangtools.version>
+      <yangtools.version>0.6.3-SNAPSHOT</yangtools.version>
    </properties>
 
    <dependencies>
         <dependency>
           <groupId>org.opendaylight.yangtools</groupId>
           <artifactId>features-yangtools</artifactId>
-          <version>0.6.2-Helium</version>
+          <version>0.6.3-SNAPSHOT</version>
           <classifier>features</classifier>
           <type>xml</type>
         </dependency>
         <dependency>
           <groupId>org.opendaylight.controller</groupId>
           <artifactId>features-nsf</artifactId>
-          <version>0.4.2-Helium</version>
+          <version>0.4.3-SNAPSHOT</version>
           <classifier>features</classifier>
           <type>xml</type>
         </dependency>
         <dependency>
           <groupId>org.opendaylight.controller</groupId>
           <artifactId>features-adsal</artifactId>
-          <version>0.8.1-Helium</version>
+          <version>0.8.2-SNAPSHOT</version>
           <classifier>features</classifier>
           <type>xml</type>
         </dependency>
         <dependency>
           <groupId>org.opendaylight.controller</groupId>
           <artifactId>features-base</artifactId>
-          <version>1.4.2-Helium</version>
+          <version>1.4.3-SNAPSHOT</version>
           <classifier>features</classifier>
           <type>xml</type>
         </dependency>
         <dependency>
             <groupId>org.opendaylight.controller</groupId>
             <artifactId>features-mdsal</artifactId>
-            <version>1.1-Helium</version>
+            <version>1.1.1-SNAPSHOT</version>
             <classifier>features</classifier>
             <type>xml</type>
         </dependency>
         <dependency>
             <groupId>org.opendaylight.controller</groupId>
             <artifactId>sal</artifactId>
-            <version>0.8.1-Helium</version>
+            <version>0.8.2-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.opendaylight.controller</groupId>
             <artifactId>sal-binding-api</artifactId>
-            <version>1.1-Helium</version>
+            <version>1.1.1-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.opendaylight.controller</groupId>
-            <version>0.4.2-Helium</version>
+            <version>0.4.3-SNAPSHOT</version>
             <artifactId>networkconfig.neutron</artifactId>
         </dependency>
         <dependency>
             <groupId>org.opendaylight.plugin2oc</groupId>
-            <version>0.1-Helium</version>
+            <version>0.1.1-SNAPSHOT</version>
             <artifactId>plugin2oc.neutron</artifactId>
         </dependency>
     <!-- test the features.xml -->
     <dependency>
       <groupId>org.opendaylight.yangtools</groupId>
       <artifactId>features-test</artifactId>
-      <version>0.6.2-Helium</version>
+      <version>0.6.3-SNAPSHOT</version>
       <scope>test</scope>
     </dependency>
 
@@ -93,7 +93,7 @@
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
       <artifactId>opendaylight-karaf-empty</artifactId>
-      <version>1.4.2-Helium</version>
+      <version>1.4.3-SNAPSHOT</version>
       <type>zip</type>
     </dependency>
    </dependencies>
