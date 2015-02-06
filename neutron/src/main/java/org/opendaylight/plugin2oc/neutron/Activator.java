@@ -80,7 +80,10 @@ public class Activator extends ComponentActivatorAbstractBase {
      */
     @Override
     public Object[] getImplementations() {
-        Object[] res = { NetworkHandler.class, SubnetHandler.class, PortHandler.class, RouterHandler.class, FloatingIpHandler.class, SecurityGroupHandler.class, SecurityGroupRulesHandler.class };
+        Object[] res = { NetworkHandler.class, SubnetHandler.class, PortHandler.class, RouterHandler.class,
+                FloatingIpHandler.class, SecurityGroupHandler.class, SecurityGroupRulesHandler.class,
+                LoadBalancerHandler.class, LoadBalancerHealthMonitorHandler.class, LoadBalancerListenerHandler.class,
+                LoadBalancerPoolHandler.class, LoadBalancerPoolMemberHandler.class, };
         return res;
     }
 
@@ -88,10 +91,10 @@ public class Activator extends ComponentActivatorAbstractBase {
      * Function that is called when configuration of the dependencies is
      * required.
      *
-     * @param c
+     *@param c
      *            dependency manager Component object, used for configuring the
      *            dependencies exported and imported
-     * @param imp
+     *@param imp
      *            Implementation class that is being configured, needed as long
      *            as the same routine can configure multiple implementations
      * @param containerName
@@ -120,6 +123,21 @@ public class Activator extends ComponentActivatorAbstractBase {
             c.setInterface(INeutronSecurityGroupAware.class.getName(), null);
         }
         if (imp.equals(SecurityGroupRulesHandler.class)) {
+            c.setInterface(INeutronSecurityRuleAware.class.getName(), null);
+        }
+        if (imp.equals(LoadBalancerHandler.class)) {
+            c.setInterface(INeutronSecurityRuleAware.class.getName(), null);
+        }
+        if (imp.equals(LoadBalancerHealthMonitorHandler.class)) {
+            c.setInterface(INeutronSecurityRuleAware.class.getName(), null);
+        }
+        if (imp.equals(LoadBalancerListenerHandler.class)) {
+            c.setInterface(INeutronSecurityRuleAware.class.getName(), null);
+        }
+        if (imp.equals(LoadBalancerPoolHandler.class)) {
+            c.setInterface(INeutronSecurityRuleAware.class.getName(), null);
+        }
+        if (imp.equals(LoadBalancerPoolMemberHandler.class)) {
             c.setInterface(INeutronSecurityRuleAware.class.getName(), null);
         }
         // Create service dependencies.
